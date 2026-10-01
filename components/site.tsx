@@ -4,7 +4,7 @@ import { SITE } from '@/lib/core'
 import { Logo } from './logo'
 import { Header } from './ui'
 
-export const REPO = process.env.NEXT_PUBLIC_REPO_URL || 'https://github.com/gaba-dev-1/dropdate'
+export const REPO = process.env.NEXT_PUBLIC_REPO_URL || 'https://github.com/gimzdev/dropdate'
 // [endpoint, one-liner for the home page, docs description, docs example]
 export const ENDPOINTS = [
   ['GET /api/events', 'Releases and tournaments with smart ?q= search', 'Releases and tournaments, sorted by date. Smart search, filters and pagination.', '?q=ps5 releases next month&limit=10'],
