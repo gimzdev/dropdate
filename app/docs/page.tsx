@@ -56,8 +56,8 @@ export default function Docs() {
       </Box>
       <Box title="Smart search">
         <p className="prose-dd mb-5">
-          The <code className="text-fg">q</code> parameter understands types (releases, tournaments, esports), platforms (pc, ps5, xbox, switch, mobile) and time (today, this week, next month, in
-          november, 2027, past). Anything left over is a typo-tolerant search on titles and genres. <code className="text-fg">meta.understood</code> shows how your query was read.
+          The <code className="text-fg">q</code> parameter understands types (releases, tournaments, esports), platforms (pc, ps5, xbox, switch, mobile) and time (today, this weekend, next 30 days, next month, oct,
+          q4, in the summer, 2027, past). Months can be abbreviated, half typed or misspelled. Anything left over is a typo-tolerant search on titles and genres (fps and mmo work too). <code className="text-fg">meta.understood</code> shows how your query was read.
         </p>
         <Code>{'/api/events?q=esports this week\n/api/events?q=nintendo in december\n/api/events?q=zelda'}</Code>
       </Box>

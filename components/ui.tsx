@@ -127,7 +127,7 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
 // ── Cards and rails ─────────────────────────────────────────────────────
 
 const TONE = { live: 'bg-rose-500 text-white', soon: 'bg-amber-400 text-black', future: 'bg-black/65 text-white', past: 'bg-black/65 text-white/80' }
-const fallback = (ev: SyntheticEvent<HTMLImageElement>) => { // a resized image that fails falls back to the original; anything else hides
+export const fallback = (ev: SyntheticEvent<HTMLImageElement>) => { // a resized image that fails falls back to the original; anything else hides
   const img = ev.currentTarget, original = img.src.replace(/\/resize\/\d+\/-\//, '/')
   if (original !== img.src) img.src = original
   else img.style.visibility = 'hidden'

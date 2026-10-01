@@ -1,6 +1,7 @@
 import { Explorer } from '@/components/explorer'
 import { ApiSection, Footer } from '@/components/site'
-import { Header, Hero, Rail, Updated } from '@/components/ui'
+import { Fresh, Radar, Schedule } from '@/components/sections'
+import { Header, Hero, Updated } from '@/components/ui'
 import { type Ev, gap, lite, shift } from '@/lib/core'
 import { getEvents } from '@/lib/data'
 
@@ -19,11 +20,13 @@ export default async function Home() {
   const near = releases.filter((e) => e.start >= today && gap(today, e.start) <= 120)
 
   const hero = (near.length >= 3 ? near : releases.filter((e) => e.start >= today)).sort(hype).slice(0, 5)
-  const soon = releases.filter((e) => e.start >= today && e.start <= shift(today, 14)).sort(hype).slice(0, 14).sort((a, b) => a.start.localeCompare(b.start))
-  const fresh = releases.filter((e) => e.start < today && gap(e.start, today) <= 30).sort(hype).slice(0, 14)
+  const fortnight = releases.filter((e) => e.start >= today && e.start <= shift(today, 14))
+  const [lead, ...others] = fortnight.sort(hype).slice(0, 11) // the first keeps its large artwork for the big tile
+  const fresh = releases.filter((e) => e.start < today && gap(e.start, today) <= 30).sort(hype).slice(0, 10)
+  const cups = [...tournaments].sort(hype).slice(0, 10).sort((a, b) => a.start.localeCompare(b.start))
   const stats: [string, number][] = [
     ['Upcoming events', upcoming.length],
-    ['Releasing in 14 days', upcoming.filter((e) => e.kind === 'release' && e.start <= shift(today, 14)).length],
+    ['Releasing in 14 days', fortnight.length],
     tournaments.length ? ['Tournaments', tournaments.length] : ['Genres tracked', new Set(releases.flatMap((e) => e.genres)).size],
     ['Platforms', 5],
   ]
@@ -45,9 +48,9 @@ export default async function Home() {
           </div>
         </div>
         <div id="releases" />
-        <Rail eyebrow="This fortnight" title="Coming up" items={soon.map(lite)} today={today} />
-        <Rail eyebrow="Fresh drops" title="Just released" items={fresh.map(lite)} today={today} />
-        <Rail eyebrow="Esports" title="Tournaments" items={tournaments.slice(0, 14)} today={today} />
+        <Radar items={lead ? [lead, ...others.map(lite)] : []} total={fortnight.length} today={today} />
+        <Fresh items={fresh.map(lite)} today={today} />
+        <Schedule items={cups.map(lite)} today={today} />
         <Explorer data={{ ...data, events: events.map(lite) }} />
         <ApiSection />
       </main>

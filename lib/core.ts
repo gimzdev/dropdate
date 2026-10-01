@@ -59,7 +59,15 @@ export function srcSet(u?: string) {
 export interface Chip { label: string; raw: string }
 export interface Parsed { kinds: Kind[]; platforms: Platform[]; range?: [string, string]; past: boolean; text: string; chips: Chip[] }
 
-const MONTH = /\b(?:in\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b(?:\s+(20\d\d))?/i
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
+const SHORT = new Map(Object.entries({ jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 }))
+/** A month from one word: its short name (oct), the name typed so far (octo) or a typo of it (ocotber, octobre). */
+function monthOf(w: string) {
+  w = w.toLowerCase()
+  return SHORT.get(w) ?? (w.length < 4 ? -1 : MONTHS.findIndex((m) => m.startsWith(w) || (w.length > 4 && m.length > 5 && dist(w, m, 1) <= 1)))
+}
+const SEASONS = new Map(Object.entries({ spring: 2, summer: 5, fall: 8, autumn: 8, winter: 11 }))
+const ALIASES: Record<string, string> = { fps: 'shooter', tps: 'shooter', mmo: 'massively multiplayer', mmorpg: 'massively multiplayer', sim: 'simulation', jrpg: 'rpg', arpg: 'rpg', moba: 'strategy' }
 const KINDS: [Kind, string, RegExp][] = [
   ['release', 'Releases', /\b(?:releases?|launch(?:es)?|drops?|games?)\b/i],
   ['tournament', 'Tournaments', /\b(?:tournaments?|esports?|majors?|championships?|cups?|finals?)\b/i],
@@ -74,23 +82,41 @@ export function parse(input: string, today: string): Parsed {
   const t = toDate(today), Y = t.getFullYear(), M = t.getMonth(), mon = t.getDate() - ((t.getDay() + 6) % 7)
   const out: Parsed = { kinds: [], platforms: [], past: false, text: '', chips: [] }
   let rest = ` ${input} `
-  const take = (re: RegExp, label: string) => { // removes the phrase from the text and shows it as a chip
-    const m = rest.match(re)
-    if (m) { rest = `${rest.slice(0, m.index)} ${rest.slice((m.index ?? 0) + m[0].length)}`; out.chips.push({ label, raw: m[0].trim() }) }
-    return m
+  const cut = (m: RegExpMatchArray, label: string) => { // removes the phrase from the text and shows it as a chip
+    rest = `${rest.slice(0, m.index)} ${rest.slice((m.index ?? 0) + m[0].length)}`
+    out.chips.push({ label, raw: m[0].trim() })
   }
+  const take = (re: RegExp, label: string) => { const m = rest.match(re); if (m) cut(m, label); return m }
   const d = (y: number, m: number, day: number) => iso(new Date(y, m, day))
   const WHEN: [RegExp, string, [string, string]][] = [
     [/\btoday\b/i, 'Today', [today, today]], [/\btomorrow\b/i, 'Tomorrow', [shift(today, 1), shift(today, 1)]],
-    [/\bnext\s+week\b/i, 'Next week', [d(Y, M, mon + 7), d(Y, M, mon + 13)]], [/\bthis\s+week(?:end)?\b/i, 'This week', [d(Y, M, mon), d(Y, M, mon + 6)]],
+    [/\bnext\s+weekend\b/i, 'Next weekend', [d(Y, M, mon + 12), d(Y, M, mon + 13)]], [/\b(?:this\s+)?weekend\b/i, 'This weekend', [d(Y, M, mon + 5), d(Y, M, mon + 6)]],
+    [/\bnext\s+week\b/i, 'Next week', [d(Y, M, mon + 7), d(Y, M, mon + 13)]], [/\bthis\s+week\b/i, 'This week', [d(Y, M, mon), d(Y, M, mon + 6)]],
+    [/\b(?:this|next)\s+fortnight\b/i, 'Next 2 weeks', [today, shift(today, 13)]],
     [/\bnext\s+month\b/i, 'Next month', [d(Y, M + 1, 1), d(Y, M + 2, 0)]], [/\bthis\s+month\b/i, 'This month', [d(Y, M, 1), d(Y, M + 1, 0)]],
     [/\bnext\s+year\b/i, 'Next year', [d(Y + 1, 0, 1), d(Y + 1, 11, 31)]], [/\bthis\s+year\b/i, 'This year', [d(Y, 0, 1), d(Y, 11, 31)]],
   ]
-  for (const [re, label, span] of WHEN) if (take(re, label)) { out.range = span; break }
-  const m = out.range ? null : rest.match(MONTH)
-  if (m) {
-    const i = 'janfebmaraprmayjunjulaugsepoctnovdec'.indexOf(m[1].toLowerCase().slice(0, 3)) / 3, y = m[2] ? +m[2] : i < M ? Y + 1 : Y
-    take(MONTH, new Date(y, i, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))
+  const days = rest.match(/\b(?:in\s+the\s+|in\s+)?next\s+(\d{1,3})\s+(day|week|month)s?\b/i) // "next 30 days"
+  if (days) { cut(days, `Next ${days[1]} ${days[2]}s`); out.range = [today, shift(today, +days[1] * { day: 1, week: 7, month: 30 }[days[2].toLowerCase() as 'day'] - 1)] }
+  for (const [re, label, span] of out.range ? [] : WHEN) if (take(re, label)) { out.range = span; break }
+  const quarter = out.range ? null : rest.match(/\bq([1-4])(?:\s+(20\d\d))?\b/i)
+  if (quarter) {
+    const n = +quarter[1] - 1, y = quarter[2] ? +quarter[2] : n * 3 + 2 < M ? Y + 1 : Y
+    cut(quarter, `Q${n + 1} ${y}`)
+    out.range = [d(y, n * 3, 1), d(y, n * 3 + 3, 0)]
+  }
+  const season = out.range ? null : rest.match(/\b(?:this|next|in)\s+(?:the\s+)?(spring|summer|fall|autumn|winter)\b/i) // "fall" alone stays a title word
+  if (season) {
+    const from = SEASONS.get(season[1].toLowerCase()) ?? 0
+    let y = from === 11 && M < 2 ? Y - 1 : Y
+    if (d(y, from + 3, 0) < today) y++
+    cut(season, `${season[1][0].toUpperCase()}${season[1].slice(1).toLowerCase()} ${y}`)
+    out.range = [d(y, from, 1), d(y, from + 3, 0)]
+  }
+  const named = out.range ? undefined : [...rest.matchAll(/\b(?:(?:in|during|for)\s+)?([a-z]{3,10})\b(?:\s+(20\d\d))?/gi)].find((x) => monthOf(x[1]) >= 0)
+  if (named) {
+    const i = monthOf(named[1]), y = named[2] ? +named[2] : d(Y, i + 1, 0) < shift(today, -60) ? Y + 1 : Y // a month we hold recent releases for stays this year
+    cut(named, new Date(y, i, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))
     out.range = [d(y, i, 1), d(y, i + 1, 0)]
   } else if (!out.range) {
     const y = rest.match(/\b(?:in\s+)?(20\d\d)\b/i)?.[1] // a year close to now; "cyberpunk 2077" stays a title
@@ -132,7 +158,7 @@ function hit(e: Ev, words: string[]) {
   const hay = [...title, ...title.flatMap((w) => ROMAN[w] ?? []), fold(e.genres.join(' '))].join(' '), parts = hay.split(' ')
   return words.every((w) => {
     const max = w.length > 7 ? 2 : 1
-    return hay.includes(w) || (w.length > 1 && initials.includes(w)) || (w.length > 3 && parts.some((p) => dist(w, p, max) <= max || dist(w, p.slice(0, w.length), 1) <= 1))
+    return hay.includes(w) || (ALIASES[w] && hay.includes(ALIASES[w])) || (w.length > 1 && initials.includes(w)) || (w.length > 3 && parts.some((p) => dist(w, p, max) <= max || dist(w, p.slice(0, w.length), 1) <= 1))
   })
 }
 

@@ -8,7 +8,7 @@ import { Card, useSaved } from './ui'
 const PAGE = 16
 const SORTS = { date: 'Release date', hype: 'Most anticipated', score: 'Top rated' }
 type Sort = keyof typeof SORTS
-const EXAMPLES = ['ps5 releases next month', 'esports this week', 'switch in december', 'xbox releases', 'pc games in november', 'past tournaments']
+const EXAMPLES = ['ps5 releases next month', 'esports this weekend', 'switch in december', 'xbox shooters in october', 'pc games q4', 'past tournaments']
 const score = (e: Ev) => e.metacritic ?? (e.rating ?? 0) * 20
 const GRID = 'grid gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
 
