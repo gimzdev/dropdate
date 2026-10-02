@@ -45,16 +45,16 @@ export default async function GamePage({ params }: Props) {
           {g.image && <img src={g.image} srcSet={srcSet(g.image)} sizes="100vw" alt="" fetchPriority="high" className="absolute inset-0 -z-10 h-full w-full object-cover object-[50%_22%]" />}
           <div className="absolute inset-0 -z-10 bg-linear-to-r from-black/85 via-black/50 to-black/20" />
           <div className="absolute inset-0 -z-10 bg-linear-to-t from-[#06080e] via-transparent to-black/30" />
-          <div className="wrap flex min-h-[clamp(560px,76svh,720px)] flex-col justify-end pt-28 pb-10 md:pb-12">
+          <div className="wrap flex min-h-[min(76svh,720px)] flex-col justify-end pt-[5.5rem] pb-8 md:pb-12">
             <Link href="/#explore" className="mb-4 text-sm text-white/70 hover:text-white md:mb-5">← All releases</Link>
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {st && <span className={`rounded-md px-2.5 py-1 text-xs font-bold ${st.tone === 'past' ? 'bg-white/20' : st.tone === 'live' ? 'bg-emerald-500 text-black' : 'bg-accent'}`}>{st.label}</span>}
               {g.metacritic ? <span className={`rounded-md px-2 py-1 text-xs font-bold ${scoreTone(g.metacritic)}`}>{g.metacritic} Metacritic</span> : null}
               {g.esrb && <span className="rounded-md border border-white/30 px-2 py-1 text-xs font-semibold">{g.esrb}</span>}
             </div>
-            <h1 className="max-w-4xl text-[clamp(2rem,3.2vw+2svh,4.5rem)] leading-[1.05] font-extrabold tracking-tight">{g.name}</h1>
+            <h1 className="max-w-4xl text-[clamp(2rem,min(3.2vw+2svh,8.5svh),4.5rem)] leading-[1.05] font-extrabold tracking-tight">{g.name}</h1>
             <p className="mt-3 text-base text-white/80 md:mt-4 md:text-lg">{date ? longDate(date) : 'Release date TBA'}{g.genres.length ? ` · ${g.genres.join(' · ')}` : ''}</p>
-            <div className="mt-5 flex flex-wrap gap-3 md:mt-6">
+            <div className="mt-[clamp(1rem,2.6svh,1.5rem)] flex flex-wrap gap-3">
               {ev && <SaveButton id={ev.id} label art />}
               {g.website && <a href={g.website} {...out} className="btn-art btn-hero">Official site ↗</a>}
               {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn-primary btn-hero">+ Add to Google Calendar</a>}

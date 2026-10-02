@@ -2,6 +2,8 @@
 
 /* Phones and tablets: things that only appear on hover elsewhere stay visible */
 @custom-variant touch (@media (hover: none));
+/* Short windows (laptops, scaled Windows displays): heroes drop optional extras so everything fits */
+@custom-variant tiny (@media (max-height: 600px));
 
 /* Theme: <html class="dark"> by default; a visitor who picked light has it removed before first paint */
 :root {
