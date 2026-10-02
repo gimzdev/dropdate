@@ -46,16 +46,16 @@ export default async function GamePage({ params }: Props) {
           {g.image && <img src={g.image} srcSet={srcSet(g.image)} sizes="100vw" alt="" fetchPriority="high" className="absolute inset-0 -z-10 h-full w-full object-cover object-[50%_12%]" />}
           <div className="absolute inset-0 -z-10 bg-linear-to-r from-black/85 via-black/50 to-black/20" />
           <div className="absolute inset-0 -z-10 bg-linear-to-t from-[#06080e] via-transparent to-black/30" />
-          <div className="wrap flex min-h-[clamp(460px,80svh,780px)] flex-col justify-end pt-24 pb-8 [@media(min-height:850px)]:pb-12">
-            <Link href="/#explore" className="mb-4 text-sm text-white/70 hover:text-white [@media(min-height:800px)]:mb-6">← All releases</Link>
+          <div className="wrap flex min-h-[clamp(420px,62svh,660px)] flex-col justify-end pt-24 pb-8 md:pb-10">
+            <Link href="/#explore" className="mb-4 text-sm text-white/70 hover:text-white md:mb-5">← All releases</Link>
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {st && <span className={`rounded-md px-2.5 py-1 text-xs font-bold ${st.tone === 'past' ? 'bg-white/20' : st.tone === 'live' ? 'bg-emerald-500 text-black' : 'bg-accent'}`}>{st.label}</span>}
               {g.metacritic ? <span className={`rounded-md px-2 py-1 text-xs font-bold ${scoreTone(g.metacritic)}`}>{g.metacritic} Metacritic</span> : null}
               {g.esrb && <span className="rounded-md border border-white/30 px-2 py-1 text-xs font-semibold">{g.esrb}</span>}
             </div>
-            <h1 className="max-w-4xl text-4xl leading-[1.02] font-extrabold tracking-tight md:text-5xl md:leading-none [@media(min-height:800px)]:md:text-6xl [@media(min-height:950px)]:md:text-7xl">{g.name}</h1>
-            <p className="mt-3 text-base text-white/80 [@media(min-height:800px)]:mt-4 [@media(min-height:800px)]:text-lg">{date ? longDate(date) : 'Release date TBA'}{g.genres.length ? ` · ${g.genres.join(' · ')}` : ''}</p>
-            <div className="mt-5 flex flex-wrap gap-3 [@media(min-height:800px)]:mt-7">
+            <h1 className="max-w-4xl text-[clamp(2rem,3.2vw+2svh,4.5rem)] leading-[1.05] font-extrabold tracking-tight">{g.name}</h1>
+            <p className="mt-3 text-base text-white/80 md:mt-4 md:text-lg">{date ? longDate(date) : 'Release date TBA'}{g.genres.length ? ` · ${g.genres.join(' · ')}` : ''}</p>
+            <div className="mt-5 flex flex-wrap gap-3 md:mt-6">
               {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn-primary px-6 py-3">+ Add to Google Calendar</a>}
               {date && ev && <a href={`/api/calendar.ics?ids=${ev.id}`} className={onArt}>Download .ics</a>}
               {ev && <SaveButton id={ev.id} label />}
@@ -64,10 +64,10 @@ export default async function GamePage({ params }: Props) {
           </div>
         </section>
 
-        <div className="wrap grid gap-12 py-12 lg:grid-cols-[1fr_340px]">
-          <div className="min-w-0 space-y-12">
-            {g.trailer && <section><h2 className="h2 mb-4">Trailer</h2><video controls preload="none" poster={g.trailer.preview} src={g.trailer.src} className="aspect-video w-full rounded-2xl border border-line/10 bg-black" /></section>}
+        <div className="wrap grid gap-10 pt-8 pb-12 md:pt-10 md:pb-16 lg:grid-cols-[1fr_340px] lg:gap-12">
+          <div className="min-w-0 space-y-10 md:space-y-12">
             {g.description && <section><h2 className="h2 mb-4">About</h2><About text={g.description} title={g.name} /></section>}
+            {g.trailer && <section><h2 className="h2 mb-4">Trailer</h2><video controls preload="none" poster={g.trailer.preview} src={g.trailer.src} className="aspect-video w-full rounded-2xl border border-line/10 bg-black" /></section>}
             {g.screenshots.length > 0 && (
               <section>
                 <h2 className="h2 mb-4">Screenshots</h2>

@@ -42,13 +42,17 @@ function parse(raw: string): Block[] {
 
 export function About({ text, title }: { text: string; title: string }): ReactNode {
   const blocks = useMemo(() => parse(text), [text])
-  const long = text.length > 900
   const [open, setOpen] = useState(false)
-  const collapsed = long && !open
+  // the preview is whole blocks: the lead and, if it is short, the next paragraph. Never a half-cut line.
+  let cut = 0, chars = 0
+  while (cut < blocks.length && cut < 3 && (chars < 380 || blocks[cut - 1]?.t === 'h')) { chars += blocks[cut].text?.length ?? (blocks[cut].items?.join('').length ?? 0); cut++ }
+  if (blocks[cut - 1]?.t === 'h') cut--
+  const long = blocks.length > cut && text.length > 700
+  const shown = open || !long ? blocks : blocks.slice(0, cut)
   return (
     <div>
-      <div className={`relative space-y-4 overflow-hidden transition-[max-height] duration-500 ${collapsed ? 'max-h-[24rem]' : 'max-h-[400rem]'}`}>
-        {blocks.map((b, n) => {
+      <div className="space-y-4">
+        {shown.map((b, n) => {
           if (b.t === 'lead') return <p key={n} className="text-lg leading-relaxed font-medium text-fg/90 md:text-xl">{b.text}</p>
           if (b.t === 'h') return <h3 key={n} className="pt-3 text-sm font-semibold tracking-wider text-fg uppercase">{b.text}</h3>
           if (b.t === 'ul') return (
@@ -58,10 +62,9 @@ export function About({ text, title }: { text: string; title: string }): ReactNo
           )
           return <p key={n} className="max-w-[68ch] leading-relaxed text-muted">{b.text}</p>
         })}
-        {collapsed && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-linear-to-t from-bg to-transparent" />}
       </div>
       {long && (
-        <button onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? `Show less about ${title}` : `Read more about ${title}`} className="btn-ghost mt-4">
+        <button onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? `Show less about ${title}` : `Read more about ${title}`} className="btn-ghost mt-5">
           {open ? 'Show less' : 'Read more'} <span aria-hidden>{open ? '↑' : '↓'}</span>
         </button>
       )}

@@ -11,7 +11,7 @@ const month = (s: string) => toDate(s).toLocaleDateString('en-US', { month: 'sho
 const Open = ({ e, className, children }: { e: Ev; className: string; children: ReactNode }) =>
   e.slug ? <Link href={href(e)} className={className}>{children}</Link> : <a href={e.url ?? '#'} target="_blank" rel="noopener noreferrer" className={className}>{children}</a>
 const Head = ({ eyebrow, title, note }: { eyebrow: string; title: string; note?: string }) => (
-  <div className="mb-8 flex items-end justify-between gap-4">
+  <div className="mb-6 flex items-end justify-between gap-4 md:mb-8">
     <div><p className="eyebrow mb-1.5">{eyebrow}</p><h2 className="h2">{title}</h2></div>
     {note && <p className="hidden text-sm text-muted sm:block">{note}</p>}
   </div>
@@ -52,7 +52,7 @@ export function Radar({ items, total, today }: { items: Ev[]; total: number; tod
   if (!items.length) return null
   const top = [items[0], ...items.slice(1, 5).sort((a, b) => a.start.localeCompare(b.start))], bento = top.length === 5, rest = items.slice(5).sort((a, b) => a.start.localeCompare(b.start))
   return (
-    <section className="py-14">
+    <section className="py-12 md:py-16">
       <div className="wrap">
         <Head eyebrow="This fortnight" title="Coming up" note={`${total} ${total === 1 ? 'release' : 'releases'} in the next two weeks`} />
         <div className="grid gap-4 lg:grid-cols-12">
@@ -90,7 +90,7 @@ export function Fresh({ items, today }: { items: Ev[]; today: string }) {
   const list = items.slice(0, 10)
   if (!list.length) return null
   return (
-    <section className="border-y border-line/10 bg-surface/40 py-14">
+    <section className="border-y border-line/10 bg-surface/40 py-12 md:py-16">
       <div className="wrap">
         <Head eyebrow="Fresh drops" title="Just released" note="The biggest launches of the last 30 days" />
         <ol className="grid grid-cols-1 gap-x-12 md:grid-flow-col md:grid-cols-2 md:grid-rows-5">
@@ -125,7 +125,7 @@ export function Schedule({ items, today }: { items: Ev[]; today: string }) {
   if (!items.length) return null
   const live = items.filter((e) => e.start <= today).length
   return (
-    <section className="py-14">
+    <section className="py-12 md:py-16">
       <div className="wrap">
         <Head eyebrow="Esports" title="Tournaments" note={live ? `${live} live now` : 'The biggest events coming up'} />
         <div className="card overflow-hidden">

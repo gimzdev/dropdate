@@ -96,7 +96,7 @@ export function Explorer({ data }: { data: Payload }) {
   }
 
   return (
-    <section id="explore" className="mt-6 border-y border-line/10 bg-surface/50 py-16 md:py-20">
+    <section id="explore" className="mt-6 border-y border-line/10 bg-surface/50 py-12 md:py-16">
       <div className="wrap">
         <div className="mx-auto mb-10 max-w-2xl text-center">
           <p className="eyebrow mb-2">Explore</p>

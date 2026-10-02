@@ -28,7 +28,7 @@ const credit = 'underline hover:text-fg'
 
 export function Footer() {
   return (
-    <footer className="border-t border-line/10 bg-surface/40 pt-14 pb-10">
+    <footer className="border-t border-line/10 bg-surface/40 pt-12 pb-10">
       <div className="wrap">
         <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)]">
           <div>
@@ -53,7 +53,7 @@ export function Footer() {
 
 export function ApiSection() {
   return (
-    <section id="api" className="py-20">
+    <section id="api" className="py-12 md:py-16">
       <div className="wrap">
         <div className="card grid items-center gap-10 overflow-hidden p-8 md:grid-cols-2 md:p-12">
           <div>
@@ -90,7 +90,7 @@ export function Doc({ eyebrow, title, intro, wide, children }: { eyebrow: string
   return (
     <>
       <Header />
-      <main className={`wrap pt-32 pb-20 ${wide ? 'max-w-4xl' : 'max-w-3xl'}`}>
+      <main className={`wrap pt-28 pb-16 ${wide ? 'max-w-4xl' : 'max-w-3xl'}`}>
         <Link href="/" className="text-sm text-muted hover:text-fg">← Back to Dropdate</Link>
         <p className="eyebrow mt-8 mb-2">{eyebrow}</p>
         <h1 className="h1 mb-4">{title}</h1>
