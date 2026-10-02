@@ -243,15 +243,15 @@ export function Hero({ slides, today }: { slides: Ev[]; today: string }) {
 
   return (
     <section className="relative isolate overflow-hidden text-white" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} aria-roledescription="carousel">
-      <div className="relative h-[clamp(540px,80svh,840px)]">
+      <div className="relative h-[calc(100svh-5.5rem)] max-h-[900px] min-h-[560px]">
         {slides.map((x, n) => loaded.includes(n) && (
           <img key={x.id} src={x.image ?? x.thumb} srcSet={srcSet(x.image)} sizes="100vw" alt="" fetchPriority={n ? 'low' : 'high'} onError={fallback}
-            className={`absolute inset-0 h-full w-full object-cover object-[50%_12%] transition-opacity duration-1000 ${n === i ? 'opacity-100' : 'opacity-0'}`} />
+            className={`absolute inset-0 h-full w-full object-cover object-[50%_22%] transition-opacity duration-1000 ${n === i ? 'opacity-100' : 'opacity-0'}`} />
         ))}
         <div className="absolute inset-0 bg-linear-to-r from-black/85 via-black/45 to-transparent" />
         <div className="absolute inset-0 bg-linear-to-t from-[#06080e] via-transparent to-black/50" />
-        <div className="wrap relative flex h-full flex-col justify-end pt-20 pb-6 md:pb-10">
-          <div key={s.id} className="max-w-2xl animate-rise">
+        <div className="wrap relative flex h-full flex-col pt-20 pb-6 md:pb-8">
+          <div key={s.id} className="flex max-w-2xl flex-1 animate-rise flex-col justify-center">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <span className="rounded-md bg-accent px-2.5 py-1 text-xs font-bold tracking-wider text-white uppercase">{i === 0 ? 'Most anticipated' : 'Featured'}</span>
               {s.metacritic ? <span className={`rounded-md px-2 py-1 text-xs font-bold ${scoreTone(s.metacritic)}`}>{s.metacritic} Metacritic</span> : null}

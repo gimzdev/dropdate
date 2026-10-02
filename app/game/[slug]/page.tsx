@@ -43,10 +43,10 @@ export default async function GamePage({ params }: Props) {
       <Header overHero />
       <main>
         <section className="relative isolate overflow-hidden text-white">
-          {g.image && <img src={g.image} srcSet={srcSet(g.image)} sizes="100vw" alt="" fetchPriority="high" className="absolute inset-0 -z-10 h-full w-full object-cover object-[50%_12%]" />}
+          {g.image && <img src={g.image} srcSet={srcSet(g.image)} sizes="100vw" alt="" fetchPriority="high" className="absolute inset-0 -z-10 h-full w-full object-cover object-[50%_22%]" />}
           <div className="absolute inset-0 -z-10 bg-linear-to-r from-black/85 via-black/50 to-black/20" />
           <div className="absolute inset-0 -z-10 bg-linear-to-t from-[#06080e] via-transparent to-black/30" />
-          <div className="wrap flex min-h-[clamp(420px,62svh,660px)] flex-col justify-end pt-24 pb-8 md:pb-10">
+          <div className="wrap flex min-h-[clamp(460px,70svh,700px)] flex-col justify-end pt-24 pb-10 md:pb-12">
             <Link href="/#explore" className="mb-4 text-sm text-white/70 hover:text-white md:mb-5">← All releases</Link>
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {st && <span className={`rounded-md px-2.5 py-1 text-xs font-bold ${st.tone === 'past' ? 'bg-white/20' : st.tone === 'live' ? 'bg-emerald-500 text-black' : 'bg-accent'}`}>{st.label}</span>}
