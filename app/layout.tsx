@@ -4,7 +4,7 @@ import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 import { SITE } from '@/lib/core'
 
-const title = 'Dropdate: the gaming calendar that updates itself'
+const title = 'Dropdate | Gaming Calendar'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),

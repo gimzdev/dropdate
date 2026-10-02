@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { About } from '@/components/about'
+import { Gallery } from '@/components/gallery'
 import { Footer } from '@/components/site'
 import { Header, Rail, SaveButton } from '@/components/ui'
 import { SITE, gap, googleUrl, lite, longDate, scoreTone, srcSet, status } from '@/lib/core'
@@ -41,10 +43,10 @@ export default async function GamePage({ params }: Props) {
       <Header overHero />
       <main>
         <section className="relative isolate overflow-hidden text-white">
-          {g.image && <img src={g.image} srcSet={srcSet(g.image)} sizes="100vw" alt="" fetchPriority="high" className="absolute inset-0 -z-10 h-full w-full object-cover object-[50%_18%]" />}
+          {g.image && <img src={g.image} srcSet={srcSet(g.image)} sizes="100vw" alt="" fetchPriority="high" className="absolute inset-0 -z-10 h-full w-full object-cover object-[50%_12%]" />}
           <div className="absolute inset-0 -z-10 bg-linear-to-r from-black/85 via-black/50 to-black/20" />
           <div className="absolute inset-0 -z-10 bg-linear-to-t from-[#06080e] via-transparent to-black/30" />
-          <div className="wrap flex min-h-[clamp(540px,58vw,780px)] flex-col justify-end pt-32 pb-12">
+          <div className="wrap flex min-h-[clamp(480px,58vw,780px)] flex-col justify-end pt-28 pb-10">
             <Link href="/#explore" className="mb-6 text-sm text-white/70 hover:text-white">← All releases</Link>
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {st && <span className={`rounded-md px-2.5 py-1 text-xs font-bold ${st.tone === 'past' ? 'bg-white/20' : st.tone === 'live' ? 'bg-emerald-500 text-black' : 'bg-accent'}`}>{st.label}</span>}
@@ -65,17 +67,11 @@ export default async function GamePage({ params }: Props) {
         <div className="wrap grid gap-12 py-12 lg:grid-cols-[1fr_340px]">
           <div className="min-w-0 space-y-12">
             {g.trailer && <section><h2 className="h2 mb-4">Trailer</h2><video controls preload="none" poster={g.trailer.preview} src={g.trailer.src} className="aspect-video w-full rounded-2xl border border-line/10 bg-black" /></section>}
-            {g.description && <section><h2 className="h2 mb-4">About</h2><div className="prose-dd whitespace-pre-line">{g.description}</div></section>}
+            {g.description && <section><h2 className="h2 mb-4">About</h2><About text={g.description} title={g.name} /></section>}
             {g.screenshots.length > 0 && (
               <section>
                 <h2 className="h2 mb-4">Screenshots</h2>
-                <div className="grid grid-cols-2 gap-3">
-                  {g.screenshots.map((s, n) => (
-                    <a key={s} href={s} {...out} className={n ? '' : 'col-span-2'}>
-                      <img src={s} srcSet={srcSet(s)} sizes={n ? '(min-width: 1024px) 420px, 50vw' : '(min-width: 1024px) 860px, 100vw'} alt={`${g.name} screenshot ${n + 1}`} loading="lazy" className="aspect-video w-full rounded-xl border border-line/10 object-cover transition hover:brightness-110" />
-                    </a>
-                  ))}
-                </div>
+                <Gallery shots={g.screenshots} name={g.name} />
               </section>
             )}
           </div>
