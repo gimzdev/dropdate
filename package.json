@@ -1,0 +1,13 @@
+{
+  "name": "dropdate",
+  "version": "1.0.0",
+  "description": "Gaming calendar for releases and events",
+  "author": "Gimz",
+  "license": "CC0-1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "docker": "docker-compose up -d"
+  }
+}
