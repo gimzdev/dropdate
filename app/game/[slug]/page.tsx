@@ -46,16 +46,16 @@ export default async function GamePage({ params }: Props) {
           {g.image && <img src={g.image} srcSet={srcSet(g.image)} sizes="100vw" alt="" fetchPriority="high" className="absolute inset-0 -z-10 h-full w-full object-cover object-[50%_12%]" />}
           <div className="absolute inset-0 -z-10 bg-linear-to-r from-black/85 via-black/50 to-black/20" />
           <div className="absolute inset-0 -z-10 bg-linear-to-t from-[#06080e] via-transparent to-black/30" />
-          <div className="wrap flex min-h-[clamp(480px,58vw,780px)] flex-col justify-end pt-28 pb-10">
-            <Link href="/#explore" className="mb-6 text-sm text-white/70 hover:text-white">← All releases</Link>
+          <div className="wrap flex min-h-[clamp(460px,80svh,780px)] flex-col justify-end pt-24 pb-8 [@media(min-height:850px)]:pb-12">
+            <Link href="/#explore" className="mb-4 text-sm text-white/70 hover:text-white [@media(min-height:800px)]:mb-6">← All releases</Link>
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {st && <span className={`rounded-md px-2.5 py-1 text-xs font-bold ${st.tone === 'past' ? 'bg-white/20' : st.tone === 'live' ? 'bg-emerald-500 text-black' : 'bg-accent'}`}>{st.label}</span>}
               {g.metacritic ? <span className={`rounded-md px-2 py-1 text-xs font-bold ${scoreTone(g.metacritic)}`}>{g.metacritic} Metacritic</span> : null}
               {g.esrb && <span className="rounded-md border border-white/30 px-2 py-1 text-xs font-semibold">{g.esrb}</span>}
             </div>
-            <h1 className="max-w-4xl text-4xl leading-[1.02] font-extrabold tracking-tight md:text-7xl md:leading-none">{g.name}</h1>
-            <p className="mt-4 text-lg text-white/80">{date ? longDate(date) : 'Release date TBA'}{g.genres.length ? ` · ${g.genres.join(' · ')}` : ''}</p>
-            <div className="mt-7 flex flex-wrap gap-3">
+            <h1 className="max-w-4xl text-4xl leading-[1.02] font-extrabold tracking-tight md:text-5xl md:leading-none [@media(min-height:800px)]:md:text-6xl [@media(min-height:950px)]:md:text-7xl">{g.name}</h1>
+            <p className="mt-3 text-base text-white/80 [@media(min-height:800px)]:mt-4 [@media(min-height:800px)]:text-lg">{date ? longDate(date) : 'Release date TBA'}{g.genres.length ? ` · ${g.genres.join(' · ')}` : ''}</p>
+            <div className="mt-5 flex flex-wrap gap-3 [@media(min-height:800px)]:mt-7">
               {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn-primary px-6 py-3">+ Add to Google Calendar</a>}
               {date && ev && <a href={`/api/calendar.ics?ids=${ev.id}`} className={onArt}>Download .ics</a>}
               {ev && <SaveButton id={ev.id} label />}
