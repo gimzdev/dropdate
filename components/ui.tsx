@@ -39,10 +39,10 @@ const Heart = ({ on }: { on: boolean }) => (
 )
 
 /** A heart on cards; a labelled button on game pages. */
-export function SaveButton({ id, label }: { id: string; label?: boolean }) {
+export function SaveButton({ id, label, art }: { id: string; label?: boolean; art?: boolean }) {
   const { has, toggle } = useSaved()
   const on = has(id)
-  if (label) return <button onClick={() => toggle(id)} aria-pressed={on} className="btn-ghost"><span className={on ? 'text-rose-500' : ''}><Heart on={on} /></span>{on ? 'Saved' : 'Save to my list'}</button>
+  if (label) return <button onClick={() => toggle(id)} aria-pressed={on} className={art ? 'btn-art btn-hero' : 'btn-ghost'}><span className={on ? 'text-rose-500' : ''}><Heart on={on} /></span>{on ? 'Saved' : 'Save to my list'}</button>
   return (
     <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggle(id) }} aria-pressed={on} aria-label={on ? 'Remove from my list' : 'Save to my list'}
       className={`flex h-8 w-8 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm transition hover:bg-black/80 ${on ? 'text-rose-500' : 'text-white opacity-0 group-hover:opacity-100 focus-visible:opacity-100 touch:opacity-100'}`}>
@@ -243,14 +243,14 @@ export function Hero({ slides, today }: { slides: Ev[]; today: string }) {
 
   return (
     <section className="relative isolate overflow-hidden text-white" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} aria-roledescription="carousel">
-      <div className="relative h-[calc(100svh-5.5rem)] max-h-[900px] min-h-[560px]">
+      <div className="relative h-[calc(100svh-5.5rem)] max-h-[900px] min-h-[600px]">
         {slides.map((x, n) => loaded.includes(n) && (
           <img key={x.id} src={x.image ?? x.thumb} srcSet={srcSet(x.image)} sizes="100vw" alt="" fetchPriority={n ? 'low' : 'high'} onError={fallback}
             className={`absolute inset-0 h-full w-full object-cover object-[50%_22%] transition-opacity duration-1000 ${n === i ? 'opacity-100' : 'opacity-0'}`} />
         ))}
         <div className="absolute inset-0 bg-linear-to-r from-black/85 via-black/45 to-transparent" />
         <div className="absolute inset-0 bg-linear-to-t from-[#06080e] via-transparent to-black/50" />
-        <div className="wrap relative flex h-full flex-col pt-20 pb-6 md:pb-8">
+        <div className="wrap relative flex h-full flex-col pt-24 pb-6 md:pb-8">
           <div key={s.id} className="flex max-w-2xl flex-1 animate-rise flex-col justify-center">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <span className="rounded-md bg-accent px-2.5 py-1 text-xs font-bold tracking-wider text-white uppercase">{i === 0 ? 'Most anticipated' : 'Featured'}</span>
@@ -260,8 +260,8 @@ export function Hero({ slides, today }: { slides: Ev[]; today: string }) {
             <p className="mt-4 text-base text-white/80 md:text-lg">{range(s.start, s.end)}{s.genres.length ? ` · ${s.genres.slice(0, 3).join(' · ')}` : ''} · {s.platforms.join(' · ')}</p>
             <div className="mt-4 md:mt-5"><Countdown start={s.start} today={today} /></div>
             <div className="mt-5 flex flex-wrap gap-3 md:mt-6">
-              <Link href={href(s)} className="btn-primary px-6 py-3">View details</Link>
-              <a href={googleUrl(s)} target="_blank" rel="noopener noreferrer" className="btn-ghost border-white/25 bg-white/10 px-6 py-3 text-white hover:bg-white/20">+ Add to calendar</a>
+              <Link href={href(s)} className="btn-primary btn-hero">View details</Link>
+              <a href={googleUrl(s)} target="_blank" rel="noopener noreferrer" className="btn-art btn-hero">+ Add to calendar</a>
             </div>
           </div>
           <div className="mt-6 grid max-w-3xl md:mt-8 gap-2 sm:gap-3" style={{ gridTemplateColumns: `repeat(${slides.length}, minmax(0, 1fr))` }}>

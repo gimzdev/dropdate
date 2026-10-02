@@ -27,7 +27,6 @@ const Fact = ({ label, children }: { label: string; children: ReactNode }) => (
 const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
   <div className="card p-5"><h2 className="mb-3 text-sm font-semibold tracking-wider text-muted uppercase">{title}</h2>{children}</div>
 )
-const onArt = 'btn-ghost border-white/25 bg-white/10 px-5 py-3 text-white'
 const out = { target: '_blank', rel: 'noopener noreferrer' }
 
 export default async function GamePage({ params }: Props) {
@@ -46,7 +45,7 @@ export default async function GamePage({ params }: Props) {
           {g.image && <img src={g.image} srcSet={srcSet(g.image)} sizes="100vw" alt="" fetchPriority="high" className="absolute inset-0 -z-10 h-full w-full object-cover object-[50%_22%]" />}
           <div className="absolute inset-0 -z-10 bg-linear-to-r from-black/85 via-black/50 to-black/20" />
           <div className="absolute inset-0 -z-10 bg-linear-to-t from-[#06080e] via-transparent to-black/30" />
-          <div className="wrap flex min-h-[clamp(460px,70svh,700px)] flex-col justify-end pt-24 pb-10 md:pb-12">
+          <div className="wrap flex min-h-[clamp(560px,76svh,720px)] flex-col justify-end pt-28 pb-10 md:pb-12">
             <Link href="/#explore" className="mb-4 text-sm text-white/70 hover:text-white md:mb-5">← All releases</Link>
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {st && <span className={`rounded-md px-2.5 py-1 text-xs font-bold ${st.tone === 'past' ? 'bg-white/20' : st.tone === 'live' ? 'bg-emerald-500 text-black' : 'bg-accent'}`}>{st.label}</span>}
@@ -56,10 +55,9 @@ export default async function GamePage({ params }: Props) {
             <h1 className="max-w-4xl text-[clamp(2rem,3.2vw+2svh,4.5rem)] leading-[1.05] font-extrabold tracking-tight">{g.name}</h1>
             <p className="mt-3 text-base text-white/80 md:mt-4 md:text-lg">{date ? longDate(date) : 'Release date TBA'}{g.genres.length ? ` · ${g.genres.join(' · ')}` : ''}</p>
             <div className="mt-5 flex flex-wrap gap-3 md:mt-6">
-              {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn-primary px-6 py-3">+ Add to Google Calendar</a>}
-              {date && ev && <a href={`/api/calendar.ics?ids=${ev.id}`} className={onArt}>Download .ics</a>}
-              {ev && <SaveButton id={ev.id} label />}
-              {g.website && <a href={g.website} {...out} className={onArt}>Official site ↗</a>}
+              {ev && <SaveButton id={ev.id} label art />}
+              {g.website && <a href={g.website} {...out} className="btn-art btn-hero">Official site ↗</a>}
+              {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn-primary btn-hero">+ Add to Google Calendar</a>}
             </div>
           </div>
         </section>

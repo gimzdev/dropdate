@@ -8,6 +8,7 @@ export function Gallery({ shots, name }: { shots: string[]; name: string }) {
   const [i, setI] = useState(0)
   const [open, setOpen] = useState(false)
   const touch = useRef<number | null>(null)
+  const closeBtn = useRef<HTMLButtonElement>(null)
   const n = shots.length
   const go = useCallback((d: number) => setI((x) => (x + d + n) % n), [n])
 
@@ -18,10 +19,11 @@ export function Gallery({ shots, name }: { shots: string[]; name: string }) {
       else if (e.key === 'ArrowRight') go(1)
       else if (e.key === 'ArrowLeft') go(-1)
     }
-    const prev = document.body.style.overflow
+    const prev = document.body.style.overflow, opener = document.activeElement as HTMLElement | null
     document.body.style.overflow = 'hidden'
+    closeBtn.current?.focus({ preventScroll: true })
     addEventListener('keydown', onKey)
-    return () => { removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+    return () => { removeEventListener('keydown', onKey); document.body.style.overflow = prev; opener?.focus({ preventScroll: true }) }
   }, [open, go])
 
   useEffect(() => { // keep the active thumbnail centred inside its strip only: never scroll the page itself
@@ -79,7 +81,7 @@ export function Gallery({ shots, name }: { shots: string[]; name: string }) {
           <div className="flex items-center justify-between px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
             <span className="font-semibold tabular-nums">{i + 1} / {n}</span>
             <span className="hidden text-white/50 sm:block">← → to browse · Esc to close</span>
-            <button onClick={() => setOpen(false)} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-xl hover:bg-white/20">×</button>
+            <button ref={closeBtn} onClick={() => setOpen(false)} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-xl hover:bg-white/20">×</button>
           </div>
           <div className="relative min-h-0 flex-1" {...swipe}>
             <img key={shots[i]} src={shots[i]} alt={`${name} screenshot ${i + 1}`} onClick={(e) => e.stopPropagation()} className="absolute inset-0 m-auto max-h-full max-w-full object-contain" />

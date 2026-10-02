@@ -21,9 +21,12 @@ function parse(raw: string): Block[] {
     }
     const letters = line.replace(/[^A-Za-z]/g, '')
     const caps = letters.length > 3 && line === line.toUpperCase()
-    const head = line.length <= 60 && (/:$/.test(line) || caps || (n < lines.length - 1 && !/[.!?,;]$/.test(line) && line.split(' ').length <= 7 && !out.every((b) => b.t !== 'p' && b.t !== 'lead')))
+    const hasLead = out.some((b) => b.t === 'lead')
+    const label = /:$/.test(line) || caps // "KEY FEATURES" or "Features:"
+    const title = hasLead && n < lines.length - 1 && !/[.!?,;]$/.test(line) && line.split(' ').length <= 7 // a short unpunctuated line between paragraphs
+    const head = line.length <= 60 && (label || title)
     if (head) out.push({ t: 'h', text: line.replace(/:$/, '') })
-    else out.push({ t: out.some((b) => b.t === 'lead') ? 'p' : 'lead', text: line })
+    else out.push({ t: hasLead ? 'p' : 'lead', text: line })
   })
   // long paragraphs are easier to read split at sentence boundaries
   return out.flatMap((b): Block[] => {

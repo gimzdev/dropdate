@@ -44,9 +44,11 @@
 
 @layer components {
   .wrap { @apply mx-auto w-full max-w-[1320px] px-5 sm:px-8; }
-  .btn-primary, .btn-ghost { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition active:scale-[.98] disabled:opacity-50; }
+  .btn-primary, .btn-ghost, .btn-art { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition active:scale-[.98] disabled:opacity-50; }
   .btn-primary { @apply bg-accent text-accent-fg shadow-card hover:brightness-110; }
   .btn-ghost { @apply border border-line/15 bg-surface/60 text-fg backdrop-blur-sm hover:border-line/30 hover:bg-surface2; }
+  .btn-art { @apply border border-white/25 bg-white/10 text-white backdrop-blur-sm hover:border-white/40 hover:bg-white/20; }
+  .btn-hero { @apply px-5 py-3 max-sm:flex-1 max-sm:basis-[9.5rem]; }
   .card { @apply rounded-2xl border border-line/10 bg-surface shadow-card; }
   .eyebrow { @apply text-xs font-semibold tracking-[0.16em] text-accent uppercase; }
   .h1 { @apply text-4xl leading-[1.05] font-extrabold tracking-tight md:text-6xl md:leading-none; }
