@@ -96,7 +96,7 @@ export function Explorer({ data }: { data: Payload }) {
   }
 
   return (
-    <section id="explore" className="mt-6 border-y border-line/10 bg-surface/50 py-12 md:py-16">
+    <section id="explore" className="mt-6 border-y border-line/10 bg-surface/60 py-14 md:py-20">
       <div className="wrap">
         <div className="mx-auto mb-10 max-w-2xl text-center">
           <p className="eyebrow mb-2">Explore</p>
@@ -111,7 +111,7 @@ export function Explorer({ data }: { data: Payload }) {
         {data.stale && !data.error && <div className="mx-auto mb-6 max-w-3xl rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-center text-sm text-amber-300">Couldn&apos;t refresh just now. Showing the last good data.</div>}
         <div className="mx-auto mb-8 max-w-3xl"><SearchBox value={q} onChange={setQ} events={data.events} today={today} chips={parsed.chips} /></div>
 
-        <div className="mb-8 flex flex-wrap items-center gap-3">
+        <div className="sticky top-[4.6rem] z-30 mb-8 flex flex-wrap items-center gap-3 rounded-xl border border-line/10 bg-bg/85 p-2.5 shadow-lift backdrop-blur-xl">
           <Segment value={kind} onChange={setKind} items={[['all', 'All'], ['release', 'Releases'], ...(data.events.some((e) => e.kind === 'tournament') ? [['tournament', 'Tournaments'] as [Kind, string]] : [])]} />
           <Select label="Platform" value={platform} onChange={setPlatform} options={[['all', 'All platforms'], ...PLATFORMS.map((p) => [p])]} />
           <Select label="Genre" value={genre} onChange={setGenre} options={[['all', 'All genres'], ...genres]} />
@@ -187,7 +187,7 @@ function SearchBox({ value, onChange, events, today, chips }: { value: string; o
         <svg className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 21l-4.3-4.3M17 11a6 6 0 11-12 0 6 6 0 0112 0z" /></svg>
         <input id="search-input" value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onFocus={() => setFocus(true)} onBlur={() => setTimeout(() => setFocus(false), 120)}
           role="combobox" aria-expanded={focus && hits.length > 0} aria-controls="search-results" aria-label="Search events" autoComplete="off" placeholder={`Search a game, or try “${EXAMPLES[example]}”`}
-          className="h-16 w-full rounded-2xl border border-line/20 bg-bg pr-24 pl-12 text-base shadow-lift outline-none transition placeholder:text-muted/70 focus:border-accent focus:ring-4 focus:ring-accent/20" />
+          className="h-16 w-full rounded-2xl border border-line/20 bg-bg pr-24 pl-12 text-base outline-none transition placeholder:text-muted/70 focus:border-fg/60 focus:ring-4 focus:ring-fg/10" />
         <div className="absolute top-1/2 right-3 -translate-y-1/2">
           {value ? <button onClick={() => onChange('')} className="rounded-md px-2 py-1 text-sm text-muted hover:text-fg">Clear</button> : <span className="kbd hidden sm:inline-flex">/</span>}
         </div>

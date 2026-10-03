@@ -1,4 +1,5 @@
-import '@fontsource-variable/inter'
+import '@fontsource-variable/geist'
+import '@fontsource-variable/geist-mono'
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
@@ -15,16 +16,12 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image' },
 }
 
-export const viewport: Viewport = { themeColor: '#06080e' }
-
-// Runs before first paint: dark unless the visitor picked light, so the page never flashes the wrong theme
-const theme = `try{if(localStorage.getItem('theme')==='light')document.documentElement.classList.remove('dark')}catch(e){}`
+export const viewport: Viewport = { themeColor: '#0a0a0a' }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: theme }} />
         <link rel="preconnect" href="https://media.rawg.io" />
         <link rel="preconnect" href="https://shared.akamai.steamstatic.com" />
       </head>

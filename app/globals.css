@@ -5,15 +5,10 @@
 /* Short windows (laptops, scaled Windows displays): heroes drop optional extras so everything fits */
 @custom-variant tiny (@media (max-height: 600px));
 
-/* Theme: <html class="dark"> by default; a visitor who picked light has it removed before first paint */
+/* One theme: dark. Monochrome on purpose, the artwork carries the colour. "accent" is paper; "accent2" is a quiet ember for signals. */
 :root {
-  --bg: 246 247 251; --surface: 255 255 255; --surface2: 238 241 248; --line: 15 23 42;
-  --fg: 15 23 42; --muted: 100 116 139; --accent: 37 99 235; --accent-fg: 255 255 255;
-  color-scheme: light;
-}
-.dark {
-  --bg: 6 8 14; --surface: 12 16 26; --surface2: 20 26 40; --line: 255 255 255;
-  --fg: 241 245 249; --muted: 148 163 184; --accent: 59 130 246; --accent-fg: 255 255 255;
+  --bg: 10 10 10; --surface: 19 19 18; --surface2: 30 30 29; --line: 255 255 255;
+  --fg: 238 237 232; --muted: 142 141 134; --accent: 242 242 238; --accent2: 232 104 66; --accent-fg: 10 10 10;
   color-scheme: dark;
 }
 
@@ -25,39 +20,46 @@
   --color-fg: rgb(var(--fg));
   --color-muted: rgb(var(--muted));
   --color-accent: rgb(var(--accent));
+  --color-accent2: rgb(var(--accent2));
   --color-accent-fg: rgb(var(--accent-fg));
-  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.08), 0 8px 24px -12px rgb(0 0 0 / 0.35);
-  --shadow-lift: 0 18px 50px -18px rgb(0 0 0 / 0.55);
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --shadow-card: 0 1px 0 rgb(var(--line) / 0.04);
+  --shadow-lift: 0 30px 70px -30px rgb(0 0 0 / 0.75);
+  --shadow-glow: 0 0 0 1px rgb(var(--fg) / 0.28), 0 28px 50px -28px rgb(0 0 0 / 0.9);
   --animate-rise: rise 0.5s ease-out both;
   --animate-bar: bar 7s linear forwards;
+  --animate-marquee: marquee 80s linear infinite;
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   @keyframes bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes marquee { to { transform: translateX(-50%); } }
 }
 
 @layer base {
   html { scroll-behavior: smooth; }
-  body { @apply bg-bg font-sans text-fg antialiased; font-feature-settings: 'cv11', 'ss03'; }
-  ::selection { @apply bg-accent text-accent-fg; }
+  body { @apply bg-bg font-sans text-fg antialiased; }
+  ::selection { @apply bg-fg text-bg; }
   section[id] { scroll-margin-top: 5.5rem; }
-  :focus-visible { @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-bg; }
+  :focus-visible { @apply outline-none ring-2 ring-fg/70 ring-offset-2 ring-offset-bg; }
   button:not(:disabled), [role='button']:not(:disabled) { cursor: pointer; }
 }
 
 @layer components {
   .wrap { @apply mx-auto w-full max-w-[1320px] px-5 sm:px-8; }
   .btn-primary, .btn-ghost, .btn-art { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition active:scale-[.98] disabled:opacity-50; }
-  .btn-primary { @apply bg-accent text-accent-fg shadow-card hover:brightness-110; }
-  .btn-ghost { @apply border border-line/15 bg-surface/60 text-fg backdrop-blur-sm hover:border-line/30 hover:bg-surface2; }
-  .btn-art { @apply border border-white/25 bg-white/10 text-white backdrop-blur-sm hover:border-white/40 hover:bg-white/20; }
+  .btn-primary { @apply bg-accent text-accent-fg hover:opacity-90; }
+  .btn-ghost { @apply border border-line/15 bg-transparent text-fg hover:border-fg/50 hover:bg-surface2; }
+  .btn-art { @apply border border-white/25 bg-black/30 text-white backdrop-blur-sm hover:border-white/60 hover:bg-black/50; }
   .btn-hero { @apply px-5 py-3 max-sm:flex-1 max-sm:basis-[9.5rem]; }
-  .card { @apply rounded-2xl border border-line/10 bg-surface shadow-card; }
-  .eyebrow { @apply text-xs font-semibold tracking-[0.16em] text-accent uppercase; }
-  .h1 { @apply text-4xl leading-[1.05] font-extrabold tracking-tight md:text-6xl md:leading-none; }
-  .h2 { @apply text-2xl font-bold tracking-tight md:text-3xl; }
-  .chip { @apply inline-flex items-center rounded-full border border-line/10 bg-surface2 px-2.5 py-1 text-xs font-medium text-muted; }
+  .card { @apply rounded-xl border border-line/10 bg-surface shadow-card; }
+  .card-glow { position: relative; }
+  .eyebrow { @apply inline-flex items-center gap-2 font-mono text-[11px] font-medium tracking-[0.18em] text-muted uppercase; }
+  .eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 9999px; background: rgb(var(--accent2)); }
+  .h1 { @apply text-4xl leading-[1.02] font-bold tracking-[-0.045em] md:text-6xl md:leading-none; }
+  .h2 { @apply text-2xl font-bold tracking-[-0.035em] md:text-4xl; }
+  .chip { @apply inline-flex items-center rounded-md border border-line/10 bg-surface2 px-2.5 py-1 font-mono text-[11px] font-medium text-muted; }
   .kbd { @apply inline-flex h-5 min-w-5 items-center justify-center rounded-sm border border-line/20 bg-surface2 px-1 font-mono text-[11px] text-muted; }
-  .code { @apply overflow-x-auto rounded-xl border border-line/10 bg-[#0b1220] p-5 font-mono text-[13px] leading-relaxed text-emerald-300; }
+  .code { @apply overflow-x-auto rounded-xl border border-line/10 bg-[#111111] p-5 font-mono text-[13px] leading-relaxed text-[#e4e3dc]; }
   .prose-dd { @apply space-y-4 leading-relaxed text-muted; }
   .prose-dd strong { @apply text-fg; }
   .dots { background-image: radial-gradient(rgb(var(--fg) / 0.1) 1px, transparent 1px); background-size: 14px 14px; }

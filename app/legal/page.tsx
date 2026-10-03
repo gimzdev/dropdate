@@ -17,7 +17,7 @@ export default function Legal() {
       <Box title="Privacy">
         <div className="prose-dd">
           <p><strong>No accounts.</strong> Dropdate does not ask for or store personal information.</p>
-          <p><strong>On your device.</strong> Your theme and your saved list live in your browser&apos;s local storage and never leave it. Your search text is kept in the page URL so you can share it.</p>
+          <p><strong>On your device.</strong> Your saved list lives in your browser&apos;s local storage and never leaves it. Your search text is kept in the page URL so you can share it.</p>
           <p><strong>Server logs.</strong> The hosting provider may keep standard request logs (such as IP address) for security and operations.</p>
           <p><strong>Third parties.</strong> Game data and artwork come from <A to="https://rawg.io" className={a}>RAWG</A> and <A to="https://store.steampowered.com" className={a}>Steam</A>, esports data from <A to="https://pandascore.co" className={a}>PandaScore</A>. Your browser loads images directly from their servers. Game names, logos and images belong to their respective owners.</p>
         </div>

@@ -11,7 +11,7 @@ const month = (s: string) => toDate(s).toLocaleDateString('en-US', { month: 'sho
 const Open = ({ e, className, children }: { e: Ev; className: string; children: ReactNode }) =>
   e.slug ? <Link href={href(e)} className={className}>{children}</Link> : <a href={e.url ?? '#'} target="_blank" rel="noopener noreferrer" className={className}>{children}</a>
 const Head = ({ eyebrow, title, note }: { eyebrow: string; title: string; note?: string }) => (
-  <div className="mb-6 flex items-end justify-between gap-4 md:mb-8">
+  <div className="mb-6 flex items-end justify-between gap-4 border-t border-line/15 pt-5 md:mb-8">
     <div><p className="eyebrow mb-1.5">{eyebrow}</p><h2 className="h2">{title}</h2></div>
     {note && <p className="hidden text-sm text-muted sm:block">{note}</p>}
   </div>
@@ -28,7 +28,7 @@ const DateBlock = ({ start, className = '' }: { start: string; className?: strin
 function Tile({ e, today, big, className = '' }: { e: Ev; today: string; big?: boolean; className?: string }) {
   const src = big ? (e.image ?? e.thumb) : e.thumb
   return (
-    <article className={`group relative overflow-hidden rounded-2xl bg-surface2 text-white ring-1 ring-line/10 transition duration-300 hover:shadow-lift hover:ring-accent/50 ${big ? 'col-span-2 row-span-2' : ''} ${className}`}>
+    <article className={`group relative overflow-hidden rounded-xl bg-surface2 text-white ring-1 ring-line/10 transition duration-300 hover:-translate-y-1 hover:shadow-glow hover:ring-white/50 ${big ? 'col-span-2 row-span-2' : ''} ${className}`}>
       <Open e={e} className="block h-full">
         {src && <img src={src} srcSet={big ? srcSet(e.image) : undefined} sizes="(min-width: 1024px) 440px, (min-width: 640px) 45vw, 100vw" alt={e.title} loading="lazy" decoding="async" onError={fallback} className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" />}
         <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/10 to-black/30" />
@@ -115,6 +115,23 @@ export function Fresh({ items, today }: { items: Ev[]; today: string }) {
         </ol>
       </div>
     </section>
+  )
+}
+
+/** A slow marquee of what is trending, right under the hero. */
+export function Ticker({ items, today }: { items: Ev[]; today: string }) {
+  if (items.length < 4) return null
+  const row = (k: string) => items.map((e) => (
+    <Open key={k + e.id} e={e} className="flex shrink-0 items-center gap-3 px-6 font-mono text-xs font-medium tracking-wide whitespace-nowrap uppercase transition hover:text-muted">
+      <span className={`h-1.5 w-1.5 rounded-full ${e.kind === 'tournament' ? 'bg-accent2' : 'bg-fg/40'}`} />
+      {e.title}
+      <span className="font-normal text-muted">{status(e, today).label}</span>
+    </Open>
+  ))
+  return (
+    <div aria-label="Trending now" className="group overflow-hidden border-y border-line/10 bg-surface py-3.5">
+      <div className="flex w-max animate-marquee group-hover:[animation-play-state:paused]">{row('a')}{row('b')}</div>
+    </div>
   )
 }
 

@@ -43,10 +43,10 @@ export default async function GamePage({ params }: Props) {
         <section className="relative isolate overflow-hidden text-white">
           {g.image && <img src={g.image} srcSet={srcSet(g.image)} sizes="100vw" alt="" fetchPriority="high" className="absolute inset-0 -z-10 h-full w-full object-cover object-top" />}
           <div className="absolute inset-0 -z-10 bg-linear-to-r from-black/85 via-black/50 to-black/20" />
-          <div className="absolute inset-0 -z-10 bg-linear-to-t from-[#06080e] via-transparent to-black/30" />
+          <div className="absolute inset-0 -z-10 bg-linear-to-t from-[#0a0a0a] via-transparent to-black/30" />
           <div className="wrap relative flex min-h-svh flex-col justify-center pt-[6rem] pb-[5rem]">
             <div className="mb-4 flex flex-wrap items-center gap-2">
-              {st && <span className={`rounded-md px-2.5 py-1 text-xs font-bold ${st.tone === 'past' ? 'bg-white/20' : st.tone === 'live' ? 'bg-emerald-500 text-black' : 'bg-accent'}`}>{st.label}</span>}
+              {st && <span className={`rounded-md px-2.5 py-1 text-xs font-bold ${st.tone === 'past' ? 'bg-white/20' : st.tone === 'live' ? 'bg-emerald-500 text-black' : 'bg-accent text-accent-fg'}`}>{st.label}</span>}
               {g.metacritic ? <span className={`rounded-md px-2 py-1 text-xs font-bold ${scoreTone(g.metacritic)}`}>{g.metacritic} Metacritic</span> : null}
               {g.esrb && <span className="rounded-md border border-white/30 px-2 py-1 text-xs font-semibold">{g.esrb}</span>}
             </div>
@@ -55,7 +55,7 @@ export default async function GamePage({ params }: Props) {
             <div className="mt-[clamp(1rem,2.6svh,1.5rem)] flex flex-wrap gap-3">
               {ev && <SaveButton id={ev.id} label art />}
               {g.website && <a href={g.website} {...out} className="btn-art btn-hero">Official site ↗</a>}
-              {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn-primary btn-hero whitespace-nowrap">+ Add to <span className="max-sm:hidden">Google&nbsp;</span>Calendar</a>}
+              {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn-primary btn-hero whitespace-nowrap"><span>+ Add to <span className="max-sm:hidden">Google&nbsp;</span>Calendar</span></a>}
             </div>
           </div>
           <a href="#details" aria-label="Scroll to details" className="absolute bottom-5 left-1/2 grid h-10 w-10 -translate-x-1/2 place-items-center rounded-full border border-white/25 bg-black/30 text-white/80 backdrop-blur-sm transition hover:bg-black/50 hover:text-white">

@@ -70,7 +70,6 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
   const router = useRouter()
   const [solid, setSolid] = useState(false)
   const [open, setOpen] = useState(false)
-  const [dark, setDark] = useState(true)
   const focusSearch = () => {
     const input = document.getElementById('search-input')
     if (!input) return router.push('/?focus=1#explore')
@@ -78,7 +77,6 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
     input.focus({ preventScroll: true })
   }
   useEffect(() => {
-    setDark(document.documentElement.classList.contains('dark'))
     const onScroll = () => setSolid(scrollY > 24)
     const onKey = (e: KeyboardEvent) => { // "/" or Ctrl/Cmd+K jumps to search, unless you're typing somewhere
       const el = document.activeElement as HTMLElement | null, typing = !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable)
@@ -90,43 +88,30 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
     return () => { removeEventListener('scroll', onScroll); removeEventListener('keydown', onKey) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const flipTheme = () => {
-    const quiet = document.createElement('style') // no colour fades while the whole page switches
-    quiet.textContent = '*,*::before,*::after{transition:none!important}'
-    document.head.append(quiet)
-    document.documentElement.classList.toggle('dark', !dark)
-    try { localStorage.setItem('theme', dark ? 'light' : 'dark') } catch {}
-    setDark(!dark)
-    getComputedStyle(document.body).color
-    setTimeout(() => quiet.remove(), 1)
-  }
   const onDark = overHero && !solid && !open // transparent header over the (always dark) hero artwork
   const ghost = `btn-ghost ${onDark ? 'border-white/25 bg-black/30 text-white hover:bg-black/50' : ''}`
   const links = (cls: string) => NAV.map(([name, to]) => <Link key={name} href={to} onClick={() => setOpen(false)} className={cls}>{name}</Link>)
 
   return (
-    <header className={`fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300 ${solid || open ? 'border-line/10 bg-bg/80 backdrop-blur-xl' : 'border-transparent'}`}>
-      <div className="wrap flex h-16 items-center gap-6">
+    <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-6">
+      <div className={`mx-auto flex h-14 max-w-[1320px] items-center gap-6 rounded-xl border px-4 transition-all duration-300 ${solid || open ? 'border-line/15 bg-bg/80 backdrop-blur-xl' : 'border-transparent'}`}>
         <Link href="/" className="flex items-center gap-2.5" aria-label="Dropdate home"><Logo /><span className={`text-xl font-extrabold tracking-tight ${onDark ? 'text-white' : 'text-fg'}`}>Dropdate</span></Link>
         <nav className="ml-4 hidden items-center gap-1 md:flex">{links(`rounded-lg px-3 py-2 text-sm font-medium transition ${onDark ? 'text-white/80 hover:text-white' : 'text-muted hover:text-fg'}`)}</nav>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={focusSearch} className={`${ghost} hidden px-3 sm:inline-flex`} aria-label="Search">
             <Icon d="M21 21l-4.3-4.3M17 11a6 6 0 11-12 0 6 6 0 0112 0z" /><span className={onDark ? 'text-white/80' : 'text-muted'}>Search</span><span className="kbd">/</span>
           </button>
-          <button onClick={flipTheme} className={`${ghost} px-2.5`} aria-label="Toggle theme">
-            {dark ? <Icon><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></Icon> : <Icon d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" />}
-          </button>
           <button onClick={() => setOpen(!open)} className={`${ghost} px-2.5 md:hidden`} aria-label="Menu" aria-expanded={open}><Icon d={open ? 'M6 6l12 12M18 6L6 18' : 'M4 7h16M4 12h16M4 17h16'} /></button>
         </div>
       </div>
-      {open && <div className="wrap space-y-1 pb-4 md:hidden">{links('block rounded-lg px-3 py-3 text-base font-medium text-muted hover:bg-surface2 hover:text-fg')}</div>}
+      {open && <div className="mx-auto mt-2 max-w-[1320px] space-y-1 rounded-xl border border-line/15 bg-bg/95 p-2 backdrop-blur-xl md:hidden">{links('block rounded-lg px-3 py-3 text-base font-medium text-muted hover:bg-surface2 hover:text-fg')}</div>}
     </header>
   )
 }
 
 // ── Cards and rails ─────────────────────────────────────────────────────
 
-const TONE = { live: 'bg-rose-500 text-white', soon: 'bg-amber-400 text-black', future: 'bg-black/65 text-white', past: 'bg-black/65 text-white/80' }
+const TONE = { live: 'bg-rose-500 text-white', soon: 'bg-white text-black', future: 'bg-black/65 text-white', past: 'bg-black/65 text-white/80' }
 export const fallback = (ev: SyntheticEvent<HTMLImageElement>) => { // a resized image that fails falls back to the original; anything else hides
   const img = ev.currentTarget, original = img.src.replace(/\/resize\/\d+\/-\//, '/')
   if (original !== img.src) img.src = original
@@ -148,16 +133,20 @@ export function Card({ e, today }: { e: Ev; today: string }) {
 
   const body = (
     <>
-      <div className={`relative aspect-[16/10] overflow-hidden rounded-xl bg-surface2 ring-1 transition duration-300 group-hover:shadow-lift ${esport ? 'dots ring-line/20 group-hover:ring-fg/40' : 'ring-line/10 group-hover:ring-accent/50'}`}>
+      <div className={`relative aspect-[16/10] overflow-hidden rounded-xl bg-surface2 ring-1 transition duration-300 group-hover:-translate-y-1 group-hover:shadow-glow ${esport ? 'dots ring-line/20 group-hover:ring-fg/40' : 'ring-line/10 group-hover:ring-accent/50'}`}>
         {frames.length ? (
+          <>
+          {esport && <img src={frames[0]} alt="" aria-hidden loading="lazy" className="absolute inset-0 h-full w-full scale-[1.8] object-cover opacity-30 blur-2xl saturate-150" />}
           <img src={frames[frame]} alt={e.title} loading="lazy" decoding="async" onError={fallback} onLoad={(ev) => { ev.currentTarget.style.visibility = '' }}
-            className={`h-full w-full transition duration-500 ${esport ? 'object-contain p-10' : 'object-cover group-hover:scale-[1.04]'}`} />
+            className={`relative h-full w-full transition duration-500 ${esport ? 'object-contain p-7 drop-shadow-[0_8px_24px_rgb(0_0_0/0.55)] group-hover:scale-105' : 'object-cover group-hover:scale-[1.04]'}`} />
+          </>
         ) : <span className="absolute inset-0 grid place-items-center p-8 text-center text-lg font-bold text-muted">{e.genres[0]}</span>}
         {!esport && <div className="absolute inset-0 bg-linear-to-t from-black/70 via-transparent to-black/20" />}
         <span className={`absolute top-2.5 left-2.5 rounded-md px-2 py-1 text-[11px] font-semibold backdrop-blur-sm ${TONE[s.tone]}`}>{s.label}</span>
         {!esport && (e.metacritic || e.rating) ? (
           <span title={e.metacritic ? 'Metacritic' : 'RAWG rating'} className={`absolute top-2.5 right-2.5 rounded-md px-1.5 py-1 text-[11px] font-bold ${e.metacritic ? scoreTone(e.metacritic) : 'bg-black/65 text-white'}`}>{e.metacritic ?? e.rating?.toFixed(1)}</span>
         ) : null}
+        {esport && e.prize ? <span className="absolute top-2.5 right-2.5 rounded-md bg-black/65 px-1.5 py-1 font-mono text-[11px] font-semibold text-white backdrop-blur-sm">{e.prize}</span> : null}
         <div className="absolute inset-x-2.5 bottom-2.5 flex items-end justify-between gap-2">
           <div className="flex flex-wrap gap-1">
             {esport && <span className="rounded-sm bg-fg px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-bg uppercase">Esports</span>}
@@ -167,7 +156,7 @@ export function Card({ e, today }: { e: Ev; today: string }) {
         </div>
       </div>
       <div className="px-0.5 pt-3">
-        <h3 className="line-clamp-1 text-[15px] leading-snug font-semibold transition group-hover:text-accent">{e.title}</h3>
+        <h3 className="line-clamp-1 text-[15px] leading-snug font-semibold tracking-tight">{e.title}</h3>
         <p className="mt-0.5 line-clamp-1 text-[13px] text-muted">{range(e.start, e.end)}{e.tba ? ' · TBA' : ''}{e.prize ? ` · ${e.prize}` : ''}{!esport && e.genres.length ? ` · ${e.genres.slice(0, 2).join(', ')}` : ''}</p>
       </div>
     </>
@@ -218,8 +207,8 @@ function Countdown({ start, today }: { start: string; today: string }) {
   return (
     <div className="flex gap-2">
       {parts.map((v, i) => (
-        <div key={i} className="min-w-[64px] rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-center backdrop-blur-sm">
-          <div className="text-2xl font-extrabold tabular-nums">{v}</div>
+        <div key={i} className="min-w-[60px] rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-center">
+          <div className="font-mono text-2xl font-medium tabular-nums">{v}</div>
           <div className="text-[10px] tracking-widest text-white/60 uppercase">{['days', 'hrs', 'min'][i]}</div>
         </div>
       ))}
@@ -249,14 +238,14 @@ export function Hero({ slides, today }: { slides: Ev[]; today: string }) {
             className={`absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-1000 ${n === i ? 'opacity-100' : 'opacity-0'}`} />
         ))}
         <div className="absolute inset-0 bg-linear-to-r from-black/85 via-black/45 to-transparent" />
-        <div className="absolute inset-0 bg-linear-to-t from-[#06080e] via-transparent to-black/50" />
+        <div className="absolute inset-0 bg-linear-to-t from-[#0a0a0a] via-transparent to-black/50" />
         <div className="wrap relative flex min-h-svh flex-col pt-[6rem] pb-6 md:pb-9">
           <div key={s.id} className="flex max-w-2xl flex-1 animate-rise flex-col justify-center">
             <div className="mb-4 flex flex-wrap items-center gap-2">
-              <span className="rounded-md bg-accent px-2.5 py-1 text-xs font-bold tracking-wider text-white uppercase">{i === 0 ? 'Most anticipated' : 'Featured'}</span>
+              <span className="rounded-md bg-accent px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-accent-fg uppercase">{i === 0 ? 'Most anticipated' : 'Featured'}</span>
               {s.metacritic ? <span className={`rounded-md px-2 py-1 text-xs font-bold ${scoreTone(s.metacritic)}`}>{s.metacritic} Metacritic</span> : null}
             </div>
-            <h1 className="text-[clamp(2.25rem,min(3.6vw+2.5svh,9svh),4.75rem)] leading-[1.03] font-extrabold tracking-tight">{s.title}</h1>
+            <h1 className="text-[clamp(2.25rem,min(3.6vw+2.5svh,9svh),4.75rem)] leading-[1.0] font-bold tracking-[-0.05em]">{s.title}</h1>
             <p className="mt-4 text-base text-white/80 md:text-lg">{range(s.start, s.end)}{s.genres.length ? ` · ${s.genres.slice(0, 3).join(' · ')}` : ''} · {s.platforms.join(' · ')}</p>
             <div className="mt-[clamp(.75rem,2.2svh,1.25rem)] tiny:hidden"><Countdown start={s.start} today={today} /></div>
             <div className="mt-[clamp(1rem,2.6svh,1.5rem)] flex flex-wrap gap-3">
@@ -271,7 +260,7 @@ export function Hero({ slides, today }: { slides: Ev[]; today: string }) {
                   {n === i && <div key={`${i}-${paused}`} className={`h-full origin-left bg-white ${paused ? '' : 'animate-bar'}`} />}
                   {n < i && <div className="h-full bg-white" />}
                 </div>
-                <p className={`mt-2 line-clamp-1 text-xs font-medium transition ${n === i ? 'text-white' : 'text-white/50 group-hover:text-white/80'}`}>{x.title}</p>
+                <p className={`mt-2 line-clamp-1 text-xs font-medium transition ${n === i ? 'text-white' : 'text-white/50 group-hover:text-white/80'}`}><span className="mr-1.5 font-mono opacity-60">{String(n + 1).padStart(2, '0')}</span>{x.title}</p>
               </button>
             ))}
           </div>

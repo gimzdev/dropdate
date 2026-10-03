@@ -1,6 +1,6 @@
 import { Explorer } from '@/components/explorer'
 import { ApiSection, Footer } from '@/components/site'
-import { Fresh, Radar, Schedule } from '@/components/sections'
+import { Fresh, Radar, Schedule, Ticker } from '@/components/sections'
 import { Header, Hero } from '@/components/ui'
 import { type Ev, gap, lite, shift } from '@/lib/core'
 import { getEvents } from '@/lib/data'
@@ -23,6 +23,7 @@ export default async function Home() {
   const fortnight = releases.filter((e) => e.start >= today && e.start <= shift(today, 14))
   const [lead, ...others] = fortnight.sort(hype).slice(0, 11) // the first keeps its large artwork for the big tile
   const fresh = releases.filter((e) => e.start < today && gap(e.start, today) <= 30).sort(hype).slice(0, 10)
+  const ticker = [...upcoming].sort(hype).slice(0, 18).map(lite)
   const cups = [...tournaments].sort(hype).slice(0, 10).sort((a, b) => a.start.localeCompare(b.start))
 
   return (
@@ -30,6 +31,7 @@ export default async function Home() {
       <Header overHero />
       <main>
         <Hero slides={hero} today={today} />
+        <Ticker items={ticker} today={today} />
         <div id="releases" />
         <Radar items={lead ? [lead, ...others.map(lite)] : []} total={fortnight.length} today={today} />
         <Fresh items={fresh.map(lite)} today={today} />
