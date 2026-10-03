@@ -4,6 +4,8 @@
 @custom-variant touch (@media (hover: none));
 /* Short windows (laptops, scaled Windows displays): heroes drop optional extras so everything fits */
 @custom-variant tiny (@media (max-height: 600px));
+/* Big desktop screens: the stats strip fits under the hero without scrolling */
+@custom-variant roomy (@media (min-width: 1600px) and (min-height: 860px));
 
 /* Theme: <html class="dark"> by default; a visitor who picked light has it removed before first paint */
 :root {

@@ -1,7 +1,7 @@
 import { Explorer } from '@/components/explorer'
 import { ApiSection, Footer } from '@/components/site'
 import { Fresh, Radar, Schedule } from '@/components/sections'
-import { Header, Hero } from '@/components/ui'
+import { Header, Hero, Updated } from '@/components/ui'
 import { type Ev, gap, lite, shift } from '@/lib/core'
 import { getEvents } from '@/lib/data'
 
@@ -23,6 +23,12 @@ export default async function Home() {
   const fortnight = releases.filter((e) => e.start >= today && e.start <= shift(today, 14))
   const [lead, ...others] = fortnight.sort(hype).slice(0, 11) // the first keeps its large artwork for the big tile
   const fresh = releases.filter((e) => e.start < today && gap(e.start, today) <= 30).sort(hype).slice(0, 10)
+  const stats: [string, number][] = [
+    ['Upcoming events', upcoming.length],
+    ['Releasing in 14 days', fortnight.length],
+    tournaments.length ? ['Tournaments', tournaments.length] : ['Genres tracked', new Set(releases.flatMap((e) => e.genres)).size],
+    ['Platforms', 5],
+  ]
   const cups = [...tournaments].sort(hype).slice(0, 10).sort((a, b) => a.start.localeCompare(b.start))
 
   return (
@@ -30,6 +36,17 @@ export default async function Home() {
       <Header overHero />
       <main>
         <Hero slides={hero} today={today} />
+        <div className="hidden border-y border-line/10 bg-surface/40 roomy:block">
+          <div className="wrap grid grid-cols-5 py-5">
+            {stats.map(([label, n]) => (
+              <div key={label}><div className="text-2xl font-extrabold tabular-nums">{n}</div><div className="text-xs text-muted">{label}</div></div>
+            ))}
+            <div className="flex items-center justify-end gap-2 text-sm text-muted">
+              <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>
+              Live · updated <Updated at={data.updated} />
+            </div>
+          </div>
+        </div>
         <div id="releases" />
         <Radar items={lead ? [lead, ...others.map(lite)] : []} total={fortnight.length} today={today} />
         <Fresh items={fresh.map(lite)} today={today} />
