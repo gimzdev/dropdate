@@ -102,7 +102,7 @@ export function Explorer({ data }: { data: Payload }) {
           <p className="eyebrow mb-2">Explore</p>
           <h2 className="h2 mb-3">Search the calendar</h2>
           <p className="text-muted">One search across every release and tournament, by game, platform or date, with your favorites a click away from your own calendar.</p>
-          <p className="mt-4 inline-flex items-center gap-2 text-sm text-muted roomy:hidden">
+          <p className="mt-4 inline-flex items-center gap-2 text-sm text-muted">
             <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>
             Live · updated <Updated at={data.updated} />
           </p>
