@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { About } from '@/components/about'
@@ -42,11 +41,10 @@ export default async function GamePage({ params }: Props) {
       <Header overHero />
       <main>
         <section className="relative isolate overflow-hidden text-white">
-          {g.image && <img src={g.image} srcSet={srcSet(g.image)} sizes="100vw" alt="" fetchPriority="high" className="absolute inset-0 -z-10 h-full w-full object-cover object-[50%_22%]" />}
+          {g.image && <img src={g.image} srcSet={srcSet(g.image)} sizes="100vw" alt="" fetchPriority="high" className="absolute inset-0 -z-10 h-full w-full object-cover object-top" />}
           <div className="absolute inset-0 -z-10 bg-linear-to-r from-black/85 via-black/50 to-black/20" />
           <div className="absolute inset-0 -z-10 bg-linear-to-t from-[#06080e] via-transparent to-black/30" />
-          <div className="wrap flex min-h-[min(76svh,720px)] flex-col justify-end pt-[5.5rem] pb-8 md:pb-12">
-            <Link href="/#explore" className="mb-4 text-sm text-white/70 hover:text-white md:mb-5">← All releases</Link>
+          <div className="wrap relative flex min-h-svh flex-col justify-center pt-[6rem] pb-[5rem]">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {st && <span className={`rounded-md px-2.5 py-1 text-xs font-bold ${st.tone === 'past' ? 'bg-white/20' : st.tone === 'live' ? 'bg-emerald-500 text-black' : 'bg-accent'}`}>{st.label}</span>}
               {g.metacritic ? <span className={`rounded-md px-2 py-1 text-xs font-bold ${scoreTone(g.metacritic)}`}>{g.metacritic} Metacritic</span> : null}
@@ -57,12 +55,15 @@ export default async function GamePage({ params }: Props) {
             <div className="mt-[clamp(1rem,2.6svh,1.5rem)] flex flex-wrap gap-3">
               {ev && <SaveButton id={ev.id} label art />}
               {g.website && <a href={g.website} {...out} className="btn-art btn-hero">Official site ↗</a>}
-              {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn-primary btn-hero">+ Add to Google Calendar</a>}
+              {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn-primary btn-hero whitespace-nowrap">+ Add to <span className="max-sm:hidden">Google&nbsp;</span>Calendar</a>}
             </div>
           </div>
+          <a href="#details" aria-label="Scroll to details" className="absolute bottom-5 left-1/2 grid h-10 w-10 -translate-x-1/2 place-items-center rounded-full border border-white/25 bg-black/30 text-white/80 backdrop-blur-sm transition hover:bg-black/50 hover:text-white">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+          </a>
         </section>
 
-        <div className="wrap grid gap-10 pt-8 pb-12 md:pt-10 md:pb-16 lg:grid-cols-[1fr_340px] lg:gap-12">
+        <div id="details" className="wrap grid scroll-mt-16 gap-10 pt-8 pb-12 md:pt-10 md:pb-16 lg:grid-cols-[1fr_340px] lg:gap-12">
           <div className="min-w-0 space-y-10 md:space-y-12">
             {g.description && <section><h2 className="h2 mb-4">About</h2><About text={g.description} title={g.name} /></section>}
             {g.trailer && <section><h2 className="h2 mb-4">Trailer</h2><video controls preload="none" poster={g.trailer.preview} src={g.trailer.src} className="aspect-video w-full rounded-2xl border border-line/10 bg-black" /></section>}

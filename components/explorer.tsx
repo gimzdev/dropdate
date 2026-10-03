@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { type KeyboardEvent, useEffect, useMemo, useState } from 'react'
 import { type Chip, type Ev, type Kind, type Payload, type Platform, PLATFORMS, href, iso, longDate, monthLabel, range, removeChip, search, shift, toDate } from '@/lib/core'
-import { Card, useSaved } from './ui'
+import { Card, Updated, useSaved } from './ui'
 
 const PAGE = 16
 const SORTS = { date: 'Release date', hype: 'Most anticipated', score: 'Top rated' }
@@ -102,6 +102,10 @@ export function Explorer({ data }: { data: Payload }) {
           <p className="eyebrow mb-2">Explore</p>
           <h2 className="h2 mb-3">Search the calendar</h2>
           <p className="text-muted">One search across every release and tournament, by game, platform or date, with your favorites a click away from your own calendar.</p>
+          <p className="mt-4 inline-flex items-center gap-2 text-sm text-muted">
+            <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" /></span>
+            Live · updated <Updated at={data.updated} />
+          </p>
         </div>
         {data.error && <div className="mx-auto mb-6 max-w-3xl rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300"><strong>Live data unavailable.</strong> {data.error} Check your environment variables and redeploy.</div>}
         {data.stale && !data.error && <div className="mx-auto mb-6 max-w-3xl rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-center text-sm text-amber-300">Couldn&apos;t refresh just now. Showing the last good data.</div>}
