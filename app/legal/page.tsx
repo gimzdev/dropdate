@@ -1,30 +1,29 @@
 import type { Metadata } from 'next'
-import { A, Box, Doc, REPO } from '@/components/site'
+import { A, Doc, DocSection, REPO } from '@/components/site'
 
-export const metadata: Metadata = { title: 'Terms & privacy' }
+export const metadata: Metadata = { title: 'Terms and privacy', alternates: { canonical: '/legal' } }
 
 export default function Legal() {
-  const a = 'text-accent underline'
   return (
-    <Doc eyebrow="Legal" title="Terms & privacy" intro="Simple, plain policies for using Dropdate.">
-      <Box title="Terms of use">
+    <Doc title="Terms and privacy" intro="Plain policies for using Dropdate and its API.">
+      <DocSection id="terms" title="Terms of use">
         <div className="prose-dd">
-          <p>Dropdate is provided &quot;as is&quot;, without warranty. Dates and details come from third-party sources and can change. Always confirm with the official source before planning around a date.</p>
-          <p><strong>What you can do:</strong> use the API, copy the code, fork the project, build commercial applications and contribute.</p>
-          <p><strong>What we ask:</strong> don&apos;t abuse the API with excessive requests, and don&apos;t use it for spam or anything illegal.</p>
+          <p>Dropdate is provided as is, without warranty. Dates and details come from third-party sources and can change, so confirm with the official source before planning around a date.</p>
+          <p><strong>You can</strong> use the API, copy the code, fork the project, build commercial applications on it and contribute back.</p>
+          <p><strong>Please don’t</strong> flood the API with requests, or use it for spam or anything illegal.</p>
         </div>
-      </Box>
-      <Box title="Privacy">
+      </DocSection>
+      <DocSection id="privacy" title="Privacy">
         <div className="prose-dd">
-          <p><strong>No accounts.</strong> Dropdate does not ask for or store personal information.</p>
-          <p><strong>On your device.</strong> Your saved list lives in your browser&apos;s local storage and never leaves it. Your search text is kept in the page URL so you can share it.</p>
-          <p><strong>Server logs.</strong> The hosting provider may keep standard request logs (such as IP address) for security and operations.</p>
-          <p><strong>Third parties.</strong> Game data and artwork come from <A to="https://rawg.io" className={a}>RAWG</A> and <A to="https://store.steampowered.com" className={a}>Steam</A>, esports data from <A to="https://pandascore.co" className={a}>PandaScore</A>. Your browser loads images directly from their servers. Game names, logos and images belong to their respective owners.</p>
+          <p><strong>No accounts.</strong> Dropdate never asks for or stores personal information.</p>
+          <p><strong>On your device.</strong> Your saved list lives in your browser’s local storage and never leaves it. Your search is kept in the page address so you can share it.</p>
+          <p><strong>Server logs.</strong> The hosting provider may keep standard request logs, such as IP addresses, for security and operations.</p>
+          <p><strong>Third parties.</strong> Game data and artwork come from <A to="https://rawg.io">RAWG</A> and <A to="https://store.steampowered.com">Steam</A>, esports data from <A to="https://pandascore.co">PandaScore</A>. Your browser loads images straight from their servers. Game names, logos and images belong to their owners.</p>
         </div>
-      </Box>
-      <Box title="Open source">
-        <p className="prose-dd">Dropdate is open source under the CC0 license: <A to={REPO} className={a}>{REPO.replace('https://', '')}</A></p>
-      </Box>
+      </DocSection>
+      <DocSection id="source" title="Open source">
+        <p className="prose-dd">Dropdate is open source under the CC0 license: <A to={REPO}>{REPO.replace('https://', '')}</A></p>
+      </DocSection>
     </Doc>
   )
 }

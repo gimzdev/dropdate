@@ -109,6 +109,14 @@ async function rawgGame(slug: string): Promise<Game | null> {
   }
 }
 
+/** Any game RAWG knows, calendar or not: the search box falls back to this so older and long-running games can be found too. */
+export async function searchGames(q: string): Promise<{ slug: string; title: string; released?: string; thumb: string }[]> {
+  const key = env.RAWG_API_KEY
+  if (!key || q.trim().length < 2) return []
+  const res = await get<{ results?: RawgGame[] }>(`${RAWG}/games?key=${key}&search=${encodeURIComponent(q.trim().slice(0, 80))}&search_precise=true&page_size=8`, HOUR)
+  return (res?.results ?? []).flatMap((g) => g.background_image ? [{ slug: g.slug, title: g.name, released: g.released ?? undefined, thumb: rawgImg(g.background_image, 640) }] : [])
+}
+
 // ── Steam (no key needed) ───────────────────────────────────────────────
 
 interface SteamApp {

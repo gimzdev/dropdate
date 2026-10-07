@@ -31,6 +31,8 @@ export const range = (a: string, b?: string) =>
   !b || b === a ? fmt(a, { ...DAY, year: 'numeric' }) : `${fmt(a, a.slice(0, 4) === b.slice(0, 4) ? DAY : { ...DAY, year: 'numeric' })} – ${fmt(b, { ...DAY, year: 'numeric' })}`
 export const longDate = (s: string) => fmt(s, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 export const monthLabel = (month: string) => fmt(`${month}-01`, { month: 'long', year: 'numeric' })
+export const monthShort = (s: string) => fmt(s, { month: 'short' })
+export const weekday = (s: string, long = false) => fmt(s, { weekday: long ? 'long' : 'short' })
 
 export function status(e: Pick<Ev, 'kind' | 'start' | 'end'>, today: string) {
   const rel = e.kind === 'release', d = gap(today, e.start)
@@ -46,7 +48,7 @@ export function ago(time: string) {
 }
 
 export const lite = ({ image: _, ...e }: Ev): Ev => e // large artwork stays on the server unless the hero needs it
-export const href = (e: Ev) => (e.slug ? `/game/${e.slug}` : (e.url ?? '#'))
+export const href = (e: Pick<Ev, 'slug' | 'url'>) => (e.slug ? `/game/${e.slug}` : (e.url ?? '#'))
 export const scoreTone = (n: number) => (n >= 75 ? 'bg-emerald-500 text-black' : n >= 50 ? 'bg-amber-400 text-black' : 'bg-rose-500 text-white')
 /** Smaller renditions of large artwork, for srcset: RAWG resizes, Steam screenshot sizes. */
 export function srcSet(u?: string) {

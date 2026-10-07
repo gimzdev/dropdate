@@ -2,50 +2,74 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { SITE } from '@/lib/core'
 import { Logo } from './logo'
-import { Header } from './ui'
+import { Header, HomeLink, Icon } from './ui'
 
 export const REPO = process.env.NEXT_PUBLIC_REPO_URL || 'https://github.com/gimzdev/dropdate'
 // [endpoint, one-liner for the home page, docs description, docs example]
 export const ENDPOINTS = [
-  ['GET /api/events', 'Releases and tournaments with smart ?q= search', 'Releases and tournaments, sorted by date. Smart search, filters and pagination.', '?q=ps5 releases next month&limit=10'],
-  ['GET /api/tournaments', 'Esports tournaments with prize pools', 'Esports tournaments with prize pools. Same filters as /api/events.', '?q=this week'],
-  ['GET /api/games', 'Full details for one game', 'Full details for one game: description, developers, trailer, screenshots, stores.', '?slug=cyberpunk-2077'],
-  ['GET /api/calendar.ics', 'Subscribable calendar feed', 'Subscribable iCalendar feed. Same filters as /api/events, or ?ids=a,b for specific events.', '?type=release&q=xbox'],
+  ['GET /api/events', 'Releases and tournaments, with plain-English search', 'Releases and tournaments, sorted by date, with smart search, filters and pagination.', '?q=ps5 releases next month&limit=10'],
+  ['GET /api/tournaments', 'Esports tournaments and prize pools', 'Esports tournaments with their prize pools. Takes the same filters as /api/events.', '?q=this week'],
+  ['GET /api/games', 'Everything about one game', 'Everything about one game: description, developers, trailer, screenshots and stores.', '?slug=cyberpunk-2077'],
+  ['GET /api/calendar.ics', 'A calendar feed you can subscribe to', 'An iCalendar feed to subscribe to. Takes the same filters as /api/events, or ?ids=a,b for specific events.', '?type=release&q=xbox'],
 ]
 
-/** A link: new tab for other sites, plain for the API, client-side for pages. */
+/** A link: a new tab for other sites, a plain link for the API, client-side for pages. */
 export const A = ({ to, children, className }: { to: string; children: ReactNode; className?: string }) =>
   to.startsWith('/') && !to.startsWith('/api/') ? <Link href={to} className={className}>{children}</Link>
     : <a href={to} className={className} {...(to.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{children}</a>
-export const Code = ({ children }: { children: string }) => <pre className="code"><code>{children}</code></pre>
+
+// Just enough highlighting for JSON and shell: keys, strings, numbers and the command.
+const TOKEN = /("(?:[^"\\\n]|\\.)*")(\s*:)?|(-?\b\d+(?:\.\d+)?\b)|(\$ \w+)|\b(true|false|null)\b/g
+function highlight(code: string) {
+  const out: ReactNode[] = []
+  let last = 0, k = 0
+  for (const m of code.matchAll(TOKEN)) {
+    const at = m.index ?? 0
+    if (at > last) out.push(code.slice(last, at))
+    const [all, str, colon, num, cmd, lit] = m
+    if (str) out.push(<span key={k++} className={colon ? 'text-muted' : 'text-fg'}>{str}</span>, colon ?? '')
+    else if (num) out.push(<span key={k++} className="text-mark">{num}</span>)
+    else if (cmd) out.push(<span key={k++} className="text-arena">{cmd}</span>)
+    else if (lit) out.push(<span key={k++} className="text-arena">{lit}</span>)
+    last = at + all.length
+  }
+  if (last < code.length) out.push(code.slice(last))
+  return out
+}
+export const Code = ({ children, label }: { children: string; label?: string }) => (
+  <figure className="min-w-0 overflow-hidden rounded-panel bg-panel ring-1 ring-line/10 ring-inset">
+    {label && <figcaption className="border-b border-line/10 px-5 py-3 text-[13px] font-medium text-dim">{label}</figcaption>}
+    <pre className="overflow-x-auto p-5 font-mono text-[13px] leading-relaxed text-[#cfcec8]"><code>{highlight(children)}</code></pre>
+  </figure>
+)
 
 const COLUMNS: [string, [string, string][]][] = [
-  ['Product', [['Releases', '/#releases'], ['Calendar', '/#explore'], ['Subscribe (.ics)', '/api/calendar.ics']]],
-  ['Developers', [['API docs', '/docs'], ['Events endpoint', '/api/events?limit=5'], ['Status of data', '/docs#freshness']]],
-  ['Project', [['GitHub ↗', REPO], ['Terms & privacy', '/legal'], ['CC0 license ↗', 'https://creativecommons.org/publicdomain/zero/1.0/']]],
+  ['Calendar', [['This week', '/#week'], ['Most anticipated', '/#upcoming'], ['Esports', '/#esports'], ['Search', '/#explore']]],
+  ['Developers', [['API docs', '/docs'], ['Events endpoint', '/api/events?limit=5'], ['Calendar feed', '/api/calendar.ics'], ['Data freshness', '/docs#freshness']]],
+  ['Project', [['Source on GitHub', REPO], ['Terms and privacy', '/legal'], ['CC0 license', 'https://creativecommons.org/publicdomain/zero/1.0/']]],
 ]
-const credit = 'underline hover:text-fg'
+const credit = 'underline decoration-line/30 underline-offset-2 transition hover:text-fg'
 
 export function Footer() {
   return (
-    <footer className="border-t border-line/10 bg-surface/40 pt-12 pb-10">
-      <div className="wrap">
-        <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)]">
-          <div>
-            <div className="mb-4 flex items-center gap-2.5"><Logo size={32} id="dd-logo-footer" /><span className="text-lg font-extrabold">Dropdate</span></div>
-            <p className="max-w-xs text-sm leading-relaxed text-muted">Every release and tournament refreshed hourly from live sources.</p>
-          </div>
-          {COLUMNS.map(([title, links]) => (
-            <div key={title}>
-              <h3 className="mb-4 text-sm font-semibold">{title}</h3>
-              <ul className="space-y-2.5 text-sm text-muted">{links.map(([name, to]) => <li key={name}><A to={to} className="hover:text-fg">{name}</A></li>)}</ul>
-            </div>
-          ))}
+    <footer className="border-t border-line/10">
+      <div className="wrap grid grid-cols-1 gap-12 py-14 md:grid-cols-[1.4fr_repeat(3,1fr)] md:py-16">
+        <div>
+          <HomeLink className="flex w-fit items-center gap-2"><Logo size={28} /><span className="display text-[22px]">Dropdate</span></HomeLink>
+          <p className="mt-4 max-w-xs text-[15px] text-muted">Game releases and esports tournaments in one calendar, refreshed every hour.</p>
         </div>
-        <div className="mt-12 flex flex-col justify-between gap-3 border-t border-line/10 pt-6 text-xs text-muted sm:flex-row">
-          <p>Game data and artwork by <A to="https://rawg.io" className={credit}>RAWG</A> and <A to="https://store.steampowered.com" className={credit}>Steam</A>. Esports data by <A to="https://pandascore.co" className={credit}>PandaScore</A>. Names and images belong to their owners.</p>
-          <p>© {new Date().getFullYear()} Dropdate</p>
-        </div>
+        {COLUMNS.map(([title, links]) => (
+          <nav key={title} aria-label={title}>
+            <h2 className="text-[15px] font-semibold">{title}</h2>
+            <ul className="mt-4 space-y-3 text-[15px] text-muted">
+              {links.map(([name, to]) => <li key={name}><A to={to} className="inline-flex items-center gap-1.5 transition hover:text-fg">{name}{to.startsWith('http') && <Icon name="external" className="h-3.5 w-3.5 opacity-60" />}</A></li>)}
+            </ul>
+          </nav>
+        ))}
+      </div>
+      <div className="wrap flex flex-col justify-between gap-3 border-t border-line/10 py-6 text-[13px] text-dim sm:flex-row">
+        <p>Game data and artwork from <A to="https://rawg.io" className={credit}>RAWG</A> and <A to="https://store.steampowered.com" className={credit}>Steam</A>, esports from <A to="https://pandascore.co" className={credit}>PandaScore</A>. Names and images belong to their owners.</p>
+        <p className="shrink-0">© {new Date().getFullYear()} Dropdate</p>
       </div>
     </footer>
   )
@@ -53,52 +77,71 @@ export function Footer() {
 
 export function ApiSection() {
   return (
-    <section id="api" className="py-12 md:py-16">
-      <div className="wrap">
-        <div className="card grid items-center gap-10 overflow-hidden p-8 md:grid-cols-2 md:p-12">
-          <div>
-            <p className="eyebrow mb-2">Developers</p>
-            <h2 className="h2 mb-3">Build on Dropdate</h2>
-            <p className="mb-6 text-muted">A free, CORS-enabled JSON API and live calendar feed. Same data as this site, no keys, no sign-up.</p>
-            <ul className="mb-8 space-y-3 text-sm">{ENDPOINTS.map(([a, b]) => <li key={a} className="flex flex-wrap items-baseline gap-x-3"><code className="font-mono text-accent">{a}</code><span className="text-muted">{b}</span></li>)}</ul>
-            <div className="flex gap-3"><Link href="/docs" className="btn-primary">Read the docs</Link><A to={REPO} className="btn-ghost">GitHub ↗</A></div>
+    <section id="api" aria-labelledby="api-title" className="border-t border-line/10 py-14 md:py-20">
+      <div className="wrap grid grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-16">
+        <div>
+          <h2 id="api-title" className="h-section">Build with the API</h2>
+          <p className="lede">The same live data as free JSON and calendar feeds. No keys, no sign-up, and any website can call it.</p>
+          <ul className="mt-8 divide-y divide-line/10 border-y border-line/10">
+            {ENDPOINTS.map(([name, short]) => (
+              <li key={name} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3">
+                <code className="font-mono text-[14px] text-fg">{name.replace('GET ', '')}</code>
+                <span className="text-[14px] text-muted">{short}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="/docs" className="btn btn-mark">Read the docs</Link>
+            <A to={REPO} className="btn btn-line">Source on GitHub</A>
           </div>
-          <Code>{`$ curl "${SITE}/api/events\\
-    ?q=ps5 releases next month&limit=1"
+        </div>
+        <Code label="Example request">{`$ curl "${SITE}/api/events?q=ps5 next month&limit=1"
 
 {
   "data": [{
     "title": "Hollow Peaks II",
     "start": "2026-11-10",
     "platforms": ["PlayStation"],
-    "metacritic": 88
+    "genres": ["Action", "RPG"]
   }],
   "meta": {
     "total": 14,
-    "understood": ["Next month",
-                   "Releases", "PlayStation"]
+    "understood": ["Next month", "PlayStation"]
   }
 }`}</Code>
-        </div>
       </div>
     </section>
   )
 }
 
-/** Text pages (docs, legal): header, a titled column of cards, footer. */
-export function Doc({ eyebrow, title, intro, wide, children }: { eyebrow: string; title: string; intro: string; wide?: boolean; children: ReactNode }) {
+/** Text pages (docs, legal): a big title, an optional table of contents, sections. */
+export function Doc({ title, intro, toc, children }: { title: string; intro: string; toc?: [string, string][]; children: ReactNode }) {
   return (
     <>
       <Header />
-      <main className={`wrap pt-28 pb-16 ${wide ? 'max-w-4xl' : 'max-w-3xl'}`}>
-        <Link href="/" className="text-sm text-muted hover:text-fg">← Back to Dropdate</Link>
-        <p className="eyebrow mt-8 mb-2">{eyebrow}</p>
-        <h1 className="h1 mb-4">{title}</h1>
-        <p className="mb-12 text-lg text-muted">{intro}</p>
-        <div className="space-y-10">{children}</div>
+      <main id="main" className="wrap pt-28 pb-20 md:pt-36 md:pb-28">
+        <Link href="/" className="inline-flex items-center gap-1.5 text-[15px] font-medium text-muted transition hover:text-fg"><Icon name="left" className="h-3.5 w-3.5" />Dropdate</Link>
+        <h1 className="display mt-6 text-[clamp(3rem,4vw+1.75rem,5.5rem)]">{title}</h1>
+        <p className="mt-5 max-w-2xl text-lg text-muted">{intro}</p>
+        <div className={`mt-14 md:mt-20 ${toc ? 'grid grid-cols-1 gap-12 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-16' : ''}`}>
+          {toc && (
+            <nav aria-label="On this page" className="hidden lg:block">
+              <ul className="sticky top-24 space-y-1 border-l border-line/10">
+                {toc.map(([id, label]) => <li key={id}><a href={`#${id}`} className="-ml-px block border-l border-transparent py-1.5 pl-4 text-[15px] text-muted transition hover:border-fg hover:text-fg">{label}</a></li>)}
+              </ul>
+            </nav>
+          )}
+          <div className="min-w-0 max-w-3xl space-y-16">{children}</div>
+        </div>
       </main>
       <Footer />
     </>
   )
 }
-export const Box = ({ title, id, gap = 'mb-4', children }: { title: string; id?: string; gap?: string; children: ReactNode }) => <section id={id} className="card p-6 md:p-8"><h2 className={`h2 ${gap}`}>{title}</h2>{children}</section>
+
+export const DocSection = ({ id, title, children }: { id: string; title: string; children: ReactNode }) => (
+  <section id={id} aria-labelledby={`${id}-title`}>
+    <h2 id={`${id}-title`} className="display mb-5 text-[2.1rem] md:text-[2.5rem]">{title}</h2>
+    {children}
+  </section>
+)

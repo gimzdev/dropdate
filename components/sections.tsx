@@ -1,83 +1,116 @@
 'use client'
 
-import Link from 'next/link'
-import type { ReactNode } from 'react'
-import { type Ev, gap, href, range, scoreTone, srcSet, status, toDate } from '@/lib/core'
-import { SaveButton, fallback } from './ui'
+import { useMemo } from 'react'
+import { type Ev, gap, longDate, monthShort, range, scoreTone, shift, srcSet, status, weekday } from '@/lib/core'
+import { Circled, DateBlock, Open, SaveButton, SectionHead, Thumb, fallback, toneText, useExplore, useToday } from './ui'
 
-// The home page below the hero: a headline bento with an agenda, a ranked list, and an esports schedule.
+// The home page under the hero: the week ahead as a wall calendar, the most anticipated games,
+// the month's biggest launches and the esports schedule.
 
-const month = (s: string) => toDate(s).toLocaleDateString('en-US', { month: 'short' })
-const Open = ({ e, className, children }: { e: Ev; className: string; children: ReactNode }) =>
-  e.slug ? <Link href={href(e)} className={className}>{children}</Link> : <a href={e.url ?? '#'} target="_blank" rel="noopener noreferrer" className={className}>{children}</a>
-const Head = ({ eyebrow, title, note }: { eyebrow: string; title: string; note?: string }) => (
-  <div className="mb-6 flex items-end justify-between gap-4 border-t border-line/15 pt-5 md:mb-8">
-    <div><p className="eyebrow mb-1.5">{eyebrow}</p><h2 className="h2">{title}</h2></div>
-    {note && <p className="hidden text-sm text-muted sm:block">{note}</p>}
-  </div>
-)
-const Thumb = ({ e, className }: { e: Ev; className: string }) =>
-  e.thumb ? <img src={e.thumb} alt="" loading="lazy" decoding="async" onError={fallback} className={className} /> : <span className={`${className} bg-surface2`} />
-const DateBlock = ({ start, className = '' }: { start: string; className?: string }) => (
-  <span className={`block text-center leading-none ${className}`}>
-    <span className="block text-[10px] font-semibold tracking-wider uppercase opacity-70">{month(start)}</span>
-    <span className="block text-xl font-extrabold tabular-nums">{+start.slice(8)}</span>
-  </span>
-)
+const underline = 'decoration-line/40 underline-offset-[3px] group-hover:underline'
 
-function Tile({ e, today, big, className = '' }: { e: Ev; today: string; big?: boolean; className?: string }) {
-  const src = big ? (e.image ?? e.thumb) : e.thumb
+/** The next seven days, one column each, today circled. */
+export function WeekStrip({ items, today: serverToday }: { items: Ev[]; today: string }) {
+  const today = useToday(serverToday)
+  const explore = useExplore()
+  const days = useMemo(() => Array.from({ length: 7 }, (_, k) => {
+    const d = shift(today, k)
+    return { d, list: items.filter((e) => e.start === d).sort((a, b) => b.pop - a.pop) }
+  }), [items, today])
+  const total = days.reduce((sum, x) => sum + x.list.length, 0)
   return (
-    <article className={`group relative overflow-hidden rounded-xl bg-surface2 text-white ring-1 ring-line/10 transition duration-300 hover:-translate-y-1 hover:shadow-glow hover:ring-white/50 ${big ? 'col-span-2 row-span-2' : ''} ${className}`}>
-      <Open e={e} className="block h-full">
-        {src && <img src={src} srcSet={big ? srcSet(e.image) : undefined} sizes="(min-width: 1024px) 440px, (min-width: 640px) 45vw, 100vw" alt={e.title} loading="lazy" decoding="async" onError={fallback} className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" />}
-        <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/10 to-black/30" />
-        <DateBlock start={e.start} className="absolute top-3 left-3 rounded-lg bg-black/55 px-2.5 py-1.5 backdrop-blur-md" />
-        {e.metacritic ? <span className={`absolute top-3 right-3 rounded-md px-1.5 py-1 text-[11px] font-bold ${scoreTone(e.metacritic)}`}>{e.metacritic}</span> : null}
-        <div className="absolute inset-x-3 bottom-3 flex items-end justify-between gap-2">
-          <div className="min-w-0">
-            <p className="mb-0.5 text-[11px] font-semibold text-white/70">{status(e, today).label}</p>
-            <h3 className={`line-clamp-2 leading-tight font-bold ${big ? 'text-2xl md:text-3xl' : 'text-sm'}`}>{e.title}</h3>
-            {big && <p className="mt-1.5 text-sm text-white/70">{[...e.genres.slice(0, 2), ...e.platforms].join(' · ')}</p>}
-          </div>
-          <SaveButton id={e.id} />
-        </div>
-      </Open>
-    </article>
+    <section id="week" aria-labelledby="week-title" className="pt-10 pb-14 md:pt-14 md:pb-20">
+      <div className="wrap">
+        <SectionHead id="week-title" title="This week"
+          lede={total ? `${total} ${total === 1 ? 'release or tournament starts' : 'releases and tournaments start'} in the next seven days.` : 'Nothing starts in the next seven days. The full calendar has what comes after.'}
+          action={<button type="button" onClick={() => explore({ day: today })} className="btn btn-line">Open the calendar</button>} />
+        <ol className="no-scrollbar bleed -my-3 flex snap-x snap-mandatory gap-8 overflow-x-auto py-3 xl:mx-0 xl:grid xl:grid-cols-7 xl:overflow-visible xl:px-0">
+          {days.map(({ d, list }) => <Day key={d} d={d} list={list} today={today} onOpen={() => explore({ day: d })} />)}
+        </ol>
+      </div>
+    </section>
   )
 }
 
-/** The next two weeks: five headliners as artwork tiles, then the rest as a dated agenda. */
-export function Radar({ items, total, today }: { items: Ev[]; total: number; today: string }) {
-  if (!items.length) return null
-  const top = [items[0], ...items.slice(1, 5).sort((a, b) => a.start.localeCompare(b.start))], bento = top.length === 5, rest = items.slice(5).sort((a, b) => a.start.localeCompare(b.start))
+function Day({ d, list, today, onOpen }: { d: string; list: Ev[]; today: string; onOpen: () => void }) {
+  const isToday = d === today, label = isToday ? 'Today' : gap(today, d) === 1 ? 'Tomorrow' : weekday(d, true)
+  const [lead, ...rest] = list, more = rest.slice(0, 3), extra = rest.length - more.length
+  return ( // columns are ruled like a wall calendar: the line sits in the gap, so every day gets the same width
+    <li className="relative flex w-[220px] shrink-0 snap-start flex-col before:absolute before:inset-y-0 before:-left-4 before:w-px before:bg-line/10 first:before:hidden xl:w-auto">
+      <button type="button" onClick={onOpen} aria-label={`${label}, ${longDate(d)}: ${list.length} ${list.length === 1 ? 'event' : 'events'}. Open it in the calendar`}
+        className="mb-4 flex items-end gap-3 rounded-lg text-left">
+        <span className="relative grid h-[58px] min-w-[50px] place-items-center">
+          {isToday && <Circled className="-inset-x-3 -inset-y-2" />}
+          <span className="display text-[52px] leading-none">{+d.slice(8)}</span>
+        </span>
+        <span className="pb-1 leading-tight">
+          <span className={`block text-[15px] font-semibold ${isToday ? 'text-mark' : ''}`}>{label}</span>
+          <span className="block text-[13px] text-muted">{list.length ? `${list.length} ${list.length === 1 ? 'drop' : 'drops'}` : monthShort(d)}</span>
+        </span>
+      </button>
+      {lead ? (
+        <Open e={lead} className="group relative block aspect-[16/10] overflow-hidden rounded-art bg-raised">
+          {lead.kind === 'tournament' ? <Thumb e={lead} className="absolute inset-0 h-full w-full" />
+            : lead.thumb ? <img src={lead.thumb} alt="" loading="lazy" decoding="async" onError={fallback} className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" /> : null}
+          <span className="absolute inset-0 bg-linear-to-t from-black/90 via-black/20 to-transparent" />
+          <span className="absolute inset-x-3 bottom-2.5">
+            {lead.kind === 'tournament' && <span className="block text-[12px] font-semibold text-arena">Esports</span>}
+            <span className="line-clamp-2 text-[14px] leading-tight font-semibold text-white">{lead.title}</span>
+          </span>
+        </Open>
+      ) : (
+        <div className="grid aspect-[16/10] place-items-center rounded-art border border-dashed border-line/12 px-4 text-center text-[13px] text-dim">Nothing starts this day</div>
+      )}
+      {more.length > 0 && (
+        <ul className="mt-3">
+          {more.map((e) => (
+            <li key={e.id}>
+              <Open e={e} className="flex items-center gap-2 rounded-md py-1 text-[14px] leading-snug text-muted transition hover:text-fg">
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${e.kind === 'tournament' ? 'bg-arena' : 'bg-line/35'}`} />
+                <span className="line-clamp-1">{e.title}</span>
+              </Open>
+            </li>
+          ))}
+        </ul>
+      )}
+      {extra > 0 && <button type="button" onClick={onOpen} className="mt-2 self-start text-[13px] font-semibold underline decoration-line/30 underline-offset-4 transition hover:decoration-mark">{extra} more</button>}
+    </li>
+  )
+}
+
+/** The most followed upcoming games after the ones in the hero: five large tiles and a short list. */
+export function Upcoming({ items, today: serverToday }: { items: Ev[]; today: string }) {
+  const today = useToday(serverToday)
+  if (items.length < 3) return null
+  const [lead, ...rest] = items, tiles = rest.slice(0, 4), list = rest.slice(4, 10), full = tiles.length === 4
   return (
-    <section className="py-12 md:py-16">
+    <section id="upcoming" aria-labelledby="upcoming-title" className="border-t border-line/10 py-14 md:py-20">
       <div className="wrap">
-        <Head eyebrow="This fortnight" title="Coming up" note={`${total} ${total === 1 ? 'release' : 'releases'} in the next two weeks`} />
-        <div className="grid gap-4 lg:grid-cols-12">
-          <div className={`grid auto-rows-[150px] grid-cols-2 gap-3 sm:auto-rows-[190px] sm:grid-cols-4 sm:gap-4 lg:auto-rows-[235px] ${rest.length ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
-            {top.map((e, n) => <Tile key={e.id} e={e} today={today} big={bento && n === 0} className={bento ? '' : 'sm:col-span-2'} />)}
+        <SectionHead id="upcoming-title" title="Most anticipated" lede="The upcoming games the most players are following." />
+        <div className="grid grid-cols-1 gap-x-8 gap-y-10 lg:grid-cols-12">
+          <div className={`grid auto-rows-[180px] grid-cols-2 gap-3 sm:auto-rows-[210px] sm:grid-cols-4 lg:auto-rows-[230px] ${list.length ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
+            <Tile e={lead} today={today} big />
+            {tiles.map((e) => <Tile key={e.id} e={e} today={today} className={full ? '' : 'sm:col-span-2'} />)}
           </div>
-          {rest.length > 0 && (
-            <aside className="card flex flex-col overflow-hidden lg:col-span-4">
-              <div className="flex items-center justify-between border-b border-line/10 px-5 py-4"><h3 className="text-sm font-semibold">Also on the calendar</h3><span className="text-xs text-muted">{rest.length} more</span></div>
-              <ul className="flex-1 divide-y divide-line/10">
-                {rest.map((e, n) => (
-                  <li key={e.id}>
-                    <Open e={e} className="group flex items-center gap-3 px-4 py-3 transition hover:bg-surface2">
-                      <span className="w-10 shrink-0">{(!n || rest[n - 1].start !== e.start) && <DateBlock start={e.start} />}</span>
-                      <Thumb e={e} className="h-11 w-[70px] shrink-0 rounded-md object-cover" />
+          {list.length > 0 && (
+            <div className="lg:col-span-4">
+              <h3 className="mb-1 text-[15px] font-semibold text-muted">Also on the radar</h3>
+              <ul className="divide-y divide-line/10">
+                {list.map((e) => (
+                  <li key={e.id} className="flex items-center gap-1">
+                    <Open e={e} className="group flex min-w-0 flex-1 items-center gap-3.5 py-3">
+                      <DateBlock start={e.start} tba={e.tba} size="sm" />
+                      <Thumb e={e} className="h-12 w-[76px] rounded-[7px]" />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold transition group-hover:text-accent">{e.title}</span>
-                        <span className="block truncate text-xs text-muted">{(e.platforms.length ? e.platforms : e.genres).join(', ')}</span>
+                        <span className={`block truncate text-[15px] font-semibold ${underline}`}>{e.title}</span>
+                        <span className="block truncate text-[13px] text-muted">{(e.platforms.length ? e.platforms : e.genres).join(', ')}</span>
                       </span>
-                      <SaveButton id={e.id} />
                     </Open>
+                    <SaveButton id={e.id} title={e.title} variant="plain" />
                   </li>
                 ))}
               </ul>
-            </aside>
+            </div>
           )}
         </div>
       </div>
@@ -85,30 +118,53 @@ export function Radar({ items, total, today }: { items: Ev[]; total: number; tod
   )
 }
 
-/** The biggest launches of the last month, ranked. */
-export function Fresh({ items, today }: { items: Ev[]; today: string }) {
-  const list = items.slice(0, 10)
-  if (!list.length) return null
+function Tile({ e, today, big, className = '' }: { e: Ev; today: string; big?: boolean; className?: string }) {
+  const src = big ? (e.image ?? e.thumb) : e.thumb, s = status(e, today)
   return (
-    <section className="border-y border-line/10 bg-surface/40 py-12 md:py-16">
+    <article className={`group relative overflow-hidden rounded-art bg-raised ${big ? 'col-span-2 row-span-2' : ''} ${className}`}>
+      <Open e={e} className="absolute inset-0 block">
+        {src && <img src={src} srcSet={big ? srcSet(e.image) : undefined} sizes={big ? '(min-width: 1024px) 560px, 100vw' : '(min-width: 1024px) 280px, 50vw'} alt="" loading="lazy" decoding="async" onError={fallback}
+          className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.03]" />}
+        <span className="absolute inset-0 bg-linear-to-t from-black/90 via-black/25 to-black/0" />
+        <span className={`absolute inset-x-0 bottom-0 flex items-end gap-3 p-4 text-white ${big ? 'md:gap-4 md:p-6' : ''}`}>
+          <DateBlock start={e.start} tba={e.tba} size={big ? 'lg' : 'md'} />
+          <span className="min-w-0 pb-0.5">
+            <span className={`block text-[13px] font-semibold ${s.tone === 'soon' ? 'text-mark' : 'text-white/75'}`}>{s.label}</span>
+            <span className={`display mt-1 block ${big ? 'text-[clamp(1.9rem,1.6vw+1.2rem,2.9rem)]' : 'line-clamp-2 text-[19px] leading-[1]'}`}>{e.title}</span>
+          </span>
+        </span>
+      </Open>
+      <div className="absolute top-3 right-3"><SaveButton id={e.id} title={e.title} /></div>
+    </article>
+  )
+}
+
+/** The biggest launches of the past month, ranked. */
+export function Fresh({ items, today: serverToday }: { items: Ev[]; today: string }) {
+  const today = useToday(serverToday)
+  if (!items.length) return null
+  return (
+    <section id="fresh" aria-labelledby="fresh-title" className="border-t border-line/10 py-14 md:py-20">
       <div className="wrap">
-        <Head eyebrow="Fresh drops" title="Just released" note="The biggest launches of the last 30 days" />
-        <ol className="grid grid-cols-1 gap-x-12 md:grid-flow-col md:grid-cols-2 md:grid-rows-5">
-          {list.map((e, n) => {
-            const ago = gap(e.start, today)
+        <SectionHead id="fresh-title" title="Just released" lede="The biggest launches of the past 30 days, ranked by how many players follow them." />
+        <ol className="grid grid-cols-1 gap-x-14 md:grid-flow-col md:grid-cols-2 md:grid-rows-5">
+          {items.map((e, n) => {
+            const days = gap(e.start, today)
             return (
-              <li key={e.id} className={n % 5 ? 'border-t border-line/10' : ''}>
-                <Open e={e} className="group flex items-center gap-4 py-3">
-                  <span className="w-9 shrink-0 text-center text-3xl font-extrabold text-transparent tabular-nums transition [-webkit-text-stroke:1.5px_rgb(var(--muted)/0.55)] group-hover:[-webkit-text-stroke-color:rgb(var(--accent))]">{n + 1}</span>
-                  <Thumb e={e} className="h-[60px] w-[104px] shrink-0 rounded-lg object-cover ring-1 ring-line/10" />
+              <li key={e.id} className={`flex items-center gap-1 border-line/10 ${n ? 'border-t' : ''} ${n % 5 === 0 ? 'md:border-t-0' : ''}`}>
+                <Open e={e} className="group flex min-w-0 flex-1 items-center gap-3.5 py-3.5 sm:gap-4">
+                  <span className="display w-7 shrink-0 text-right text-[30px] text-dim sm:w-8 sm:text-[34px]">{n + 1}</span>
+                  <Thumb e={e} className="h-[50px] w-[84px] rounded-[7px] sm:h-[58px] sm:w-[100px]" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold transition group-hover:text-accent">{e.title}</span>
-                    <span className="block truncate text-sm text-muted">{ago < 1 ? 'Out today' : ago === 1 ? 'Yesterday' : `${ago} days ago`} · {(e.genres.length ? e.genres.slice(0, 2) : e.platforms).join(', ')}</span>
+                    <span className={`line-clamp-2 text-[16px] leading-snug font-semibold ${underline}`}>{e.title}</span>
+                    <span className="mt-0.5 flex gap-3 text-[13px]">
+                      <span className="shrink-0 font-semibold text-go">{days < 1 ? 'Out today' : days === 1 ? 'Out yesterday' : `Out ${days} days ago`}</span>
+                      <span className="truncate text-muted">{e.genres.slice(0, 2).join(', ')}</span>
+                    </span>
                   </span>
-                  {e.metacritic ? <span className={`rounded-md px-2 py-1 text-sm font-bold ${scoreTone(e.metacritic)}`}>{e.metacritic}</span>
-                    : e.rating ? <span className="rounded-md bg-surface2 px-2 py-1 text-sm font-bold text-muted">{e.rating.toFixed(1)}</span> : null}
-                  <SaveButton id={e.id} />
+                  {e.metacritic ? <span title="Metacritic score" className={`tag text-[13px] ${scoreTone(e.metacritic)}`}>{e.metacritic}</span> : null}
                 </Open>
+                <SaveButton id={e.id} title={e.title} variant="plain" />
               </li>
             )
           })}
@@ -118,56 +174,42 @@ export function Fresh({ items, today }: { items: Ev[]; today: string }) {
   )
 }
 
-/** A slow marquee of what is trending, right under the hero. */
-export function Ticker({ items, today }: { items: Ev[]; today: string }) {
-  if (items.length < 4) return null
-  const row = (k: string) => items.map((e) => (
-    <Open key={k + e.id} e={e} className="flex shrink-0 items-center gap-3 px-6 font-mono text-xs font-medium tracking-wide whitespace-nowrap uppercase transition hover:text-muted">
-      <span className={`h-1.5 w-1.5 rounded-full ${e.kind === 'tournament' ? 'bg-accent2' : 'bg-fg/40'}`} />
-      {e.title}
-      <span className="font-normal text-muted">{status(e, today).label}</span>
-    </Open>
-  ))
-  return (
-    <div aria-label="Trending now" className="group overflow-hidden border-y border-line/10 bg-surface py-3.5">
-      <div className="flex w-max animate-marquee group-hover:[animation-play-state:paused]">{row('a')}{row('b')}</div>
-    </div>
-  )
-}
+const COLS = 'md:grid-cols-[170px_minmax(0,1fr)_200px_130px]'
 
-const COLS = 'md:grid-cols-[120px_minmax(0,1fr)_170px_190px_90px]'
-
-/** Esports as a schedule: what is live, what is next, the game and the prize. */
-export function Schedule({ items, today }: { items: Ev[]; today: string }) {
+/** Esports as a broadcast schedule: what is live, what is next, the game and the prize pool. */
+export function Schedule({ items, today: serverToday }: { items: Ev[]; today: string }) {
+  const today = useToday(serverToday)
   if (!items.length) return null
-  const live = items.filter((e) => e.start <= today).length
+  const live = items.filter((e) => status(e, today).tone === 'live').length
   return (
-    <section className="py-12 md:py-16">
+    <section id="esports" aria-labelledby="esports-title" className="border-t border-line/10 py-14 md:py-20">
       <div className="wrap">
-        <Head eyebrow="Esports" title="Tournaments" note={live ? `${live} live now` : 'The biggest events coming up'} />
-        <div className="card overflow-hidden">
-          <div className={`hidden gap-4 border-b border-line/10 px-5 py-3 text-[11px] font-semibold tracking-wider text-muted uppercase md:grid ${COLS}`}><span>Status</span><span>Tournament</span><span>Game</span><span>Dates</span><span className="text-right">Prize</span></div>
-          <ul className="divide-y divide-line/10">
+        <SectionHead id="esports-title" title="Esports"
+          lede={live ? `${live} ${live === 1 ? 'tournament is' : 'tournaments are'} live right now, and the biggest ones coming up.` : 'The biggest tournaments coming up, with their prize pools.'} />
+        <div className="overflow-hidden rounded-panel bg-panel">
+          <div className={`hidden gap-6 border-b border-line/10 px-6 py-3 text-[13px] font-medium text-dim md:grid ${COLS}`}><span>When</span><span>Tournament</span><span>Game</span><span className="text-right">Prize pool</span></div>
+          <ul className="divide-y divide-line/[0.07]">
             {items.map((e) => {
               const s = status(e, today), on = s.tone === 'live'
+              const when = (
+                <span className={`inline-flex items-center gap-2 font-semibold ${on ? 'text-live' : toneText(e, s.tone) === 'text-muted' ? 'text-fg' : toneText(e, s.tone)}`}>
+                  {on && <span className="h-2 w-2 animate-pulse rounded-full bg-live" />}{s.label}
+                </span>
+              )
               return (
                 <li key={e.id}>
-                  <Open e={e} className={`group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-4 py-3.5 transition hover:bg-surface2 md:px-5 ${COLS}`}>
-                    <span className={`order-2 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold md:order-none ${on ? 'bg-rose-500 text-white' : 'border border-line/15 text-muted'}`}>
-                      {on && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />}{s.label}
-                    </span>
-                    <span className="order-1 flex min-w-0 items-center gap-3 md:order-none">
-                      <span className="dots grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface2 ring-1 ring-line/15">
-                        {e.thumb && <img src={e.thumb} alt="" loading="lazy" decoding="async" onError={fallback} className="h-full w-full object-contain p-1.5" />}
-                      </span>
+                  <Open e={e} className={`group grid grid-cols-1 items-center gap-x-6 px-4 py-4 transition hover:bg-raised/60 md:px-6 ${COLS}`}>
+                    <span className="hidden flex-col text-[14px] md:flex">{when}<span className="text-[13px] text-muted">{range(e.start, e.end)}</span></span>
+                    <span className="flex min-w-0 items-center gap-4">
+                      <Thumb e={e} className="h-12 w-12 rounded-[12px]" />
                       <span className="min-w-0">
-                        <span className="block truncate font-semibold transition group-hover:text-accent">{e.title}</span>
-                        <span className="block truncate text-xs text-muted md:hidden">{[e.genres[0], range(e.start, e.end)].filter(Boolean).join(' · ')}</span>
+                        <span className={`line-clamp-2 text-[16px] leading-snug font-semibold md:line-clamp-1 ${underline}`}>{e.title}</span>
+                        <span className="mt-1 flex flex-wrap gap-x-3 text-[13px] md:hidden">{when}<span className="text-muted">{range(e.start, e.end)}</span></span>
+                        <span className="block truncate text-[13px] text-muted md:hidden">{[e.genres[0], e.prize].filter(Boolean).join(', ')}</span>
                       </span>
                     </span>
-                    <span className="hidden truncate text-sm text-muted md:block">{e.genres[0]}</span>
-                    <span className="hidden text-sm text-muted md:block">{range(e.start, e.end)}</span>
-                    <span className="hidden text-right text-sm font-semibold md:block">{e.prize ?? <span className="font-normal text-muted">·</span>}</span>
+                    <span className="hidden truncate text-[15px] text-muted md:block">{e.genres[0]}</span>
+                    <span className="hidden text-right text-[15px] font-semibold md:block">{e.prize ?? <span className="font-normal text-dim">Not announced</span>}</span>
                   </Open>
                 </li>
               )
