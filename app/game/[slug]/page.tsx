@@ -2,11 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { About } from '@/components/about'
-import { Gallery } from '@/components/gallery'
+import { About, Gallery, Rail } from '@/components/game'
 import { Footer } from '@/components/site'
-import { Countdown, Header, Icon, Rail, SaveButton } from '@/components/ui'
-import { SITE, gap, googleUrl, lite, longDate, monthLabel, scoreTone, srcSet, status, weekday } from '@/lib/core'
+import { BigDate, Countdown, Header, Icon, SaveButton } from '@/components/ui'
+import { SITE, gap, googleUrl, lite, longDate, monthLabel, scoreTone, srcSet, status } from '@/lib/core'
 import { getEvents, getGame } from '@/lib/data'
 
 export const revalidate = 21600
@@ -27,8 +26,12 @@ const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
     {children}
   </section>
 )
+const Part = ({ id, title, children }: { id: string; title: string; children: ReactNode }) => (
+  <section aria-labelledby={`${id}-title`}><h2 id={`${id}-title`} className="h-section mb-6">{title}</h2>{children}</section>
+)
 const COLS = ['', 'md:grid-cols-1', 'md:grid-cols-2', 'md:grid-cols-3', 'md:grid-cols-4']
 const out = { target: '_blank', rel: 'noopener noreferrer' }
+const filled = (rows: string[][]) => rows.filter(([, v]) => v)
 
 export default async function GamePage({ params }: Props) {
   const [g, data] = await Promise.all([getGame((await params).slug), getEvents()])
@@ -36,17 +39,17 @@ export default async function GamePage({ params }: Props) {
   const { today } = data, ev = data.events.find((e) => e.id === g.id), date = ev?.start ?? g.released // the hourly calendar has the freshest date
   const st = date ? status({ kind: 'release', start: date }, today) : undefined, upcoming = !!date && date > today, tba = !!ev?.tba
   const nearby = date ? data.events.filter((e) => e.id !== g.id && Math.abs(gap(date, e.start)) <= 10).sort((a, b) => b.pop - a.pop).slice(0, 12).map(lite) : []
-  const facts = ([
+  const facts = filled([
     ['Release date', date ? (tba ? `${monthLabel(date.slice(0, 7))}, exact day not announced` : longDate(date)) : 'Not announced yet'],
     ['Platforms', g.platforms.join(', ')],
     ['Developer', g.developers.slice(0, 2).join(', ')],
     ['Publisher', g.publishers.slice(0, 2).join(', ')],
-  ] as [string, string][]).filter(([, v]) => v)
-  const details = ([
+  ])
+  const details = filled([
     ['Average playtime', g.playtime ? `${g.playtime} hours` : ''],
     ['RAWG rating', g.rating ? `${g.rating.toFixed(1)} out of 5` : ''],
     ['Age rating', g.esrb ?? ''],
-  ] as [string, string][]).filter(([, v]) => v)
+  ])
   const ld = { '@context': 'https://schema.org', '@type': 'VideoGame', name: g.name, url: `${SITE}/game/${g.slug}`, image: g.image, description: g.description?.slice(0, 300), datePublished: date, genre: g.genres, gamePlatform: g.platforms, publisher: g.publishers.map((name) => ({ '@type': 'Organization', name })) }
 
   return (
@@ -62,24 +65,16 @@ export default async function GamePage({ params }: Props) {
           <div className="wrap flex min-h-[min(88svh,860px)] flex-col pt-24 pb-10 md:pb-14">
             <Link href="/#explore" className="inline-flex w-fit items-center gap-1.5 text-[15px] font-medium text-white/75 transition hover:text-white"><Icon name="left" className="h-3.5 w-3.5" />Calendar</Link>
             <div className="mt-auto pt-16">
-              {date ? (
-                <p className="flex items-end gap-4">
-                  <span className="sr-only">{facts[0][1]}</span>
-                  <span aria-hidden className="display text-[clamp(5rem,4vw+3.25rem,8.5rem)] leading-[0.78]">{tba ? 'TBA' : +date.slice(8)}</span>
-                  <span aria-hidden className="pb-1 leading-tight">
-                    <span className="block text-xl font-semibold md:text-2xl">{monthLabel(date.slice(0, 7))}</span>
-                    <span className="block text-white/65 md:text-lg">{tba ? 'Exact day not announced' : weekday(date, true)}</span>
-                  </span>
-                </p>
-              ) : <p className="text-xl font-semibold">Release date not announced yet</p>}
+              {date ? <BigDate date={date} tba={tba} size="text-[clamp(5rem,4vw+3.25rem,8.5rem)]" unknown="Exact day not announced" label={facts[0][1]} />
+                : <p className="text-xl font-semibold">Release date not announced yet</p>}
               <h1 className="display mt-6 max-w-[18ch] text-[clamp(2.75rem,3.4vw+1.6rem,5.25rem)]">{g.name}</h1>
               <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2.5">
                 {st && !upcoming && <span className={`text-[15px] font-semibold ${st.tone === 'live' ? 'text-go' : 'text-white/75'}`}>{st.label}</span>}
-                {g.metacritic ? <span title="Metacritic score" className={`tag text-[13px] ${scoreTone(g.metacritic)}`}>{g.metacritic} Metacritic</span> : null}
+                {!!g.metacritic && <span title="Metacritic score" className={`tag text-[13px] ${scoreTone(g.metacritic)}`}>{g.metacritic} Metacritic</span>}
                 {g.esrb && <span className="rounded-full px-2.5 py-0.5 text-[13px] font-medium ring-1 ring-white/30 ring-inset">{g.esrb}</span>}
                 {g.genres.length > 0 && <span className="text-[15px] text-white/65">{g.genres.slice(0, 3).join(', ')}</span>}
               </div>
-              {upcoming && date && <Countdown start={date} today={today} className="mt-6 short:hidden" />}
+              {upcoming && <Countdown start={date} today={today} className="mt-6 short:hidden" />}
               <div className="mt-7 flex flex-wrap gap-3">
                 {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn btn-mark"><Icon name="plus" />Add to calendar</a>}
                 {ev && <SaveButton id={ev.id} title={g.name} label variant="glass" />}
@@ -104,9 +99,9 @@ export default async function GamePage({ params }: Props) {
 
         <div className="wrap grid grid-cols-1 gap-12 py-12 md:py-16 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-16">
           <div className="min-w-0 space-y-14">
-            {g.description && <section aria-labelledby="about-title"><h2 id="about-title" className="h-section mb-6">About</h2><About text={g.description} title={g.name} /></section>}
-            {g.trailer && <section aria-labelledby="trailer-title"><h2 id="trailer-title" className="h-section mb-6">Trailer</h2><video controls preload="none" poster={g.trailer.preview} src={g.trailer.src} className="aspect-video w-full rounded-panel bg-black" /></section>}
-            {g.screenshots.length > 0 && <section aria-labelledby="shots-title"><h2 id="shots-title" className="h-section mb-6">Screenshots</h2><Gallery shots={g.screenshots} name={g.name} /></section>}
+            {g.description && <Part id="about" title="About"><About text={g.description} title={g.name} /></Part>}
+            {g.trailer && <Part id="trailer" title="Trailer"><video controls preload="none" poster={g.trailer.preview} src={g.trailer.src} className="aspect-video w-full rounded-panel bg-black" /></Part>}
+            {g.screenshots.length > 0 && <Part id="shots" title="Screenshots"><Gallery shots={g.screenshots} name={g.name} /></Part>}
             {!g.description && !g.trailer && !g.screenshots.length && <p className="text-lg text-muted">No description or media yet. They usually appear closer to launch.</p>}
           </div>
           <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">

@@ -68,8 +68,8 @@
   .skip:focus { transform: none; }
 
   /* Condensed and heavy: dates, numbers, headings */
-  .display { font-stretch: 75%; font-weight: 800; letter-spacing: -0.012em; line-height: 0.92; }
-  .h-section { font-stretch: 75%; font-weight: 800; letter-spacing: -0.012em; line-height: 0.95; font-size: clamp(2.25rem, 2.2vw + 1.45rem, 3.5rem); }
+  .display, .h-section { font-stretch: 75%; font-weight: 800; letter-spacing: -0.012em; line-height: 0.92; }
+  .h-section { line-height: 0.95; font-size: clamp(2.25rem, 2.2vw + 1.45rem, 3.5rem); }
   .lede { @apply mt-3 max-w-xl text-[17px] leading-relaxed text-muted; }
 
   .btn { @apply inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full px-5 text-[15px] font-semibold whitespace-nowrap transition select-none active:scale-[.97] disabled:pointer-events-none disabled:opacity-40; }

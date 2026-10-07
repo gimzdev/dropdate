@@ -3,12 +3,11 @@
 //   Steam       the most wishlisted and most anticipated upcoming PC games (RAWG only lists a few dozen)
 //   PandaScore  esports series: running, upcoming and just finished
 
+import { cache } from 'react'
 import { type Ev, type Game, type Payload, type Platform, iso, shift } from './core'
 
 const env = process.env
-const RAWG = env.RAWG_BASE || 'https://api.rawg.io/api'
-const STEAM = env.STEAM_BASE || 'https://store.steampowered.com'
-const PANDA = env.PANDA_BASE || 'https://api.pandascore.co'
+const RAWG = env.RAWG_BASE || 'https://api.rawg.io/api', STEAM = env.STEAM_BASE || 'https://store.steampowered.com', PANDA = env.PANDA_BASE || 'https://api.pandascore.co'
 const HOUR = 3600, DAY = 86400
 
 /**
@@ -28,18 +27,10 @@ async function get<T>(url: string, revalidate = HOUR, headers?: Record<string, s
     await new Promise((r) => setTimeout(r, 1500))
   }
 }
+/** Pages 1 to n, all requested at once (a page past the end is simply empty or a 404). */
+const pages = <T,>(n: number, page: (p: number) => Promise<T>) => Promise.all(Array.from({ length: n }, (_, i) => page(i + 1)))
 
-/** Runs `job` over `items` with at most `n` requests in flight. */
-async function pool<T, R>(items: T[], n: number, job: (item: T) => Promise<R>) {
-  const out: R[] = []
-  let next = 0
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (next < items.length) { const i = next++; out[i] = await job(items[i]) }
-  }))
-  return out
-}
-
-const kebab = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+const kebab = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 const same = (s: string) => kebab(s).replace(/^the-/, '') // "same game" key across sources
 const clean = (s: string) => s.replace(/[™®©]/g, '').replace(/\s+/g, ' ').trim()
 const decode = (s: string) =>
@@ -48,12 +39,10 @@ const decode = (s: string) =>
 
 // ── RAWG ────────────────────────────────────────────────────────────────
 
-interface RawgGame {
+interface Rawg { // a list entry; game pages add the details below
   id: number; slug: string; name: string; released: string | null; tba?: boolean; background_image: string | null
   rating?: number; metacritic?: number | null; added?: number; genres?: { name: string }[]
   parent_platforms?: { platform: { slug: string } }[]; short_screenshots?: { image: string }[]
-}
-interface RawgDetail extends RawgGame {
   description_raw?: string; website?: string; esrb_rating?: { name: string } | null; playtime?: number
   tags?: { name: string; language?: string }[]; platforms?: { platform: { name: string } }[]
   developers?: { name: string }[]; publishers?: { name: string }[]; stores?: { store: { id: number; name: string } }[]
@@ -64,14 +53,11 @@ const PLAT: Record<string, Platform> = { pc: 'PC', mac: 'PC', linux: 'PC', web: 
 const rawgImg = (u: string, w: 640 | 1920) => u.replace(/\/media\/(?=games\/|screenshots\/)/, `/media/resize/${w}/-/`)
 const names = (l?: { name: string }[]) => (l ?? []).map((x) => x.name)
 
-async function rawg(dates: string, maxPages: number): Promise<Ev[]> {
+async function rawg(dates: string, max: number): Promise<Ev[]> {
   const key = env.RAWG_API_KEY
   if (!key) return []
-  const page = (p: number) => get<{ count?: number; results?: RawgGame[] }>(`${RAWG}/games?key=${key}&dates=${dates}&ordering=-added&page_size=40&page=${p}`)
-  const first = await page(1)
-  const pages = Math.min(maxPages, Math.ceil((first?.count ?? 0) / 40))
-  const rest = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, i) => page(i + 2)))
-  return [first, ...rest].flatMap((r) => r?.results ?? []).flatMap((g): Ev[] => {
+  const all = await pages(max, (p) => get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&dates=${dates}&ordering=-added&page_size=40&page=${p}`))
+  return all.flatMap((r) => r?.results ?? []).flatMap((g): Ev[] => {
     if (!g.released || !g.background_image) return [] // no date or no artwork, no card
     const platforms = [...new Set((g.parent_platforms ?? []).map((p) => PLAT[p.platform.slug]).filter(Boolean))]
     return [{
@@ -86,17 +72,15 @@ async function rawg(dates: string, maxPages: number): Promise<Ev[]> {
 async function rawgGame(slug: string): Promise<Game | null> {
   const key = env.RAWG_API_KEY
   if (!key) return null
-  const at = (sub = '') => `${RAWG}/games/${slug}${sub}?key=${key}`
+  // details barely change: kept two days, which keeps RAWG's monthly quota safe even when crawlers visit every page
+  const at = <T,>(sub = '') => get<T>(`${RAWG}/games/${slug}${sub}?key=${key}`, 2 * DAY)
   const [g, shots, movies, stores] = await Promise.all([
-    get<RawgDetail>(at(), 2 * DAY), // details barely change: kept two days, which keeps RAWG's monthly quota safe even when crawlers visit every page
-    get<{ results?: { image: string }[] }>(at('/screenshots'), 2 * DAY),
-    get<{ results?: { preview: string; data: { max?: string; 480?: string } }[] }>(at('/movies'), 2 * DAY),
-    get<{ results?: { store_id: number; url: string }[] }>(at('/stores'), 2 * DAY),
+    at<Rawg>(), at<{ results?: { image: string }[] }>('/screenshots'),
+    at<{ results?: { preview: string; data: { max?: string; 480?: string } }[] }>('/movies'), at<{ results?: { store_id: number; url: string }[] }>('/stores'),
   ])
   if (g === undefined) throw new Error('RAWG is unreachable') // never cache a hiccup as a 404 page
   if (!g) return null
-  const store = new Map((g.stores ?? []).map((s) => [s.store.id, s.store.name]))
-  const clip = movies?.results?.find((m) => m.data.max || m.data[480])
+  const store = new Map((g.stores ?? []).map((s) => [s.store.id, s.store.name])), clip = movies?.results?.find((m) => m.data.max || m.data[480])
   return {
     id: `rawg-${g.id}`, slug: g.slug, name: g.name, description: g.description_raw?.trim() || undefined, released: g.released ?? undefined,
     website: g.website || undefined, image: g.background_image ? rawgImg(g.background_image, 1920) : undefined,
@@ -105,7 +89,7 @@ async function rawgGame(slug: string): Promise<Game | null> {
     platforms: (g.platforms ?? []).map((p) => p.platform.name), developers: names(g.developers), publishers: names(g.publishers),
     screenshots: (shots?.results ?? []).slice(0, 8).map((s) => rawgImg(s.image, 1920)),
     trailer: clip ? { preview: clip.preview, src: (clip.data.max || clip.data[480]) as string } : undefined,
-    stores: (stores?.results ?? []).flatMap((s) => (store.get(s.store_id) && s.url ? [{ name: store.get(s.store_id) as string, url: s.url }] : [])),
+    stores: (stores?.results ?? []).flatMap((s) => { const name = store.get(s.store_id); return name && s.url ? [{ name, url: s.url }] : [] }),
   }
 }
 
@@ -113,8 +97,8 @@ async function rawgGame(slug: string): Promise<Game | null> {
 export async function searchGames(q: string): Promise<{ slug: string; title: string; released?: string; thumb: string }[]> {
   const key = env.RAWG_API_KEY
   if (!key || q.trim().length < 2) return []
-  const res = await get<{ results?: RawgGame[] }>(`${RAWG}/games?key=${key}&search=${encodeURIComponent(q.trim().slice(0, 80))}&search_precise=true&page_size=8`, HOUR)
-  return (res?.results ?? []).flatMap((g) => g.background_image ? [{ slug: g.slug, title: g.name, released: g.released ?? undefined, thumb: rawgImg(g.background_image, 640) }] : [])
+  const res = await get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&search=${encodeURIComponent(q.trim().slice(0, 80))}&search_precise=true&page_size=8`)
+  return (res?.results ?? []).flatMap((g) => (g.background_image ? [{ slug: g.slug, title: g.name, released: g.released ?? undefined, thumb: rawgImg(g.background_image, 640) }] : []))
 }
 
 // ── Steam (no key needed) ───────────────────────────────────────────────
@@ -147,26 +131,25 @@ async function steamList(filter: string, weight: number): Promise<Row[]> {
 }
 
 const listed = (a: SteamApp) => (!a.type || a.type === 'game') && !a.content_descriptors?.ids?.some((x) => x === 3 || x === 4) // games only, no adult-only
-
-async function steamApp(id: string) {
-  const res = await get<Record<string, { success?: boolean; data?: SteamApp }>>(
-    `${STEAM}/api/appdetails?appids=${id}&cc=us&l=english&filters=basic,release_date,genres,screenshots,platforms,metacritic,developers,publishers,content_descriptors`, DAY)
+const steamApp = async (id: string) => {
+  const res = await get<Record<string, { data?: SteamApp }>>(`${STEAM}/api/appdetails?appids=${id}&cc=us&l=english&filters=basic,release_date,genres,screenshots,platforms,metacritic,developers,publishers,content_descriptors`, DAY)
   return res === undefined ? undefined : (res?.[id]?.data ?? null)
 }
 
 async function steam(rows: Row[], skip: Set<string>, today: string): Promise<Ev[]> {
   const best = new Map<string, Row>()
   for (const r of rows) if (r.date && r.date >= today && !skip.has(same(r.title)) && (best.get(r.id)?.pop ?? -1) < r.pop) best.set(r.id, r)
-  const picks = [...best.values()].sort((a, b) => b.pop - a.pop).slice(0, 120)
-  // Details are cached for a day, so only new games cost a request. If Steam throttles or a cold start runs long,
-  // stop asking: the games missing now are fetched on the next refresh.
-  let down = false
+  const picks = [...best.values()].sort((a, b) => b.pop - a.pop).slice(0, 120), apps: (SteamApp | null | undefined)[] = []
+  // Details are cached for a day, so only new games cost a request, eight at a time. If Steam throttles or a cold start
+  // runs long, stop asking: the games missing now are fetched on the next refresh.
+  let next = 0, down = false
   const until = Date.now() + 25000
-  const apps = await pool(picks, 6, async (r) => {
-    const app = down || Date.now() > until ? undefined : await steamApp(r.id)
-    if (app === undefined) down = true
-    return app
-  })
+  await Promise.all(Array.from({ length: 8 }, async () => {
+    for (let i = next++; i < picks.length; i = next++) {
+      apps[i] = down || Date.now() > until ? undefined : await steamApp(picks[i].id)
+      if (apps[i] === undefined) down = true
+    }
+  }))
   return picks.flatMap((r, i): Ev[] => {
     const a = apps[i]
     if (!a?.header_image || !listed(a)) return []
@@ -185,9 +168,9 @@ async function steamGame(id: string): Promise<Game | null> {
   if (!a || !listed(a)) return null
   const text = (html = '') =>
     decode(html.replace(/<li[^>]*>/gi, '• ').replace(/<br\s*\/?>|<\/(?:p|li|h\d|ul)>/gi, '\n').replace(/<[^>]+>/g, '')).replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
-  const shots = a.screenshots ?? []
+  const shots = a.screenshots ?? [], name = clean(a.name)
   return {
-    id: `steam-${id}`, slug: kebab(`steam ${id} ${clean(a.name)}`), name: clean(a.name), description: text(a.about_the_game) || a.short_description,
+    id: `steam-${id}`, slug: kebab(`steam ${id} ${name}`), name, description: text(a.about_the_game) || a.short_description,
     released: steamDate(a.release_date?.date), website: a.website || undefined, image: shots[0]?.path_full ?? a.header_image, metacritic: a.metacritic?.score,
     genres: (a.genres ?? []).map((g) => g.description), tags: [], developers: a.developers ?? [], publishers: a.publishers ?? [],
     platforms: (['windows', 'mac', 'linux'] as const).filter((p) => a.platforms?.[p]).map((p) => ({ windows: 'PC', mac: 'macOS', linux: 'Linux' })[p]),
@@ -214,24 +197,17 @@ async function esports(): Promise<Ev[]> {
   const token = env.PANDASCORE_TOKEN
   if (!token) return []
   const wanted = (env.PANDASCORE_TIERS || 's,a,b,c').toLowerCase().split(',').map((t) => t.trim())
-  const list = async (kind: 'running' | 'upcoming' | 'past', pages = 4) => {
-    const all: Serie[] = []
-    for (let n = 1; n <= pages; n++) {
-      const page = await get<Serie[]>(`${PANDA}/series/${kind}?sort=${kind === 'past' ? '-end_at' : 'begin_at'}&page[size]=50&page[number]=${n}`, HOUR, { Authorization: `Bearer ${token}` })
-      all.push(...(page ?? []))
-      if (!page || page.length < 50) break
-    }
-    return all
-  }
-  const series = new Map((await Promise.all([list('running'), list('upcoming'), list('past', 1)])).flat().map((s) => [s.id, s]))
-  return [...series.values()].flatMap((s): Ev[] => {
+  // Up to 200 running and 200 upcoming series (two pages of 100) and the 50 that just ended, all requested at once
+  const list = (kind: string, n: number, size: number, sort = 'begin_at') =>
+    pages(n, (p) => get<Serie[]>(`${PANDA}/series/${kind}?sort=${sort}&page[size]=${size}&page[number]=${p}`, HOUR, { Authorization: `Bearer ${token}` }))
+  const lists = await Promise.all([list('running', 2, 100), list('upcoming', 2, 100), list('past', 1, 50, '-end_at')])
+  return [...new Map(lists.flat().flatMap((page) => page ?? []).map((s) => [s.id, s])).values()].flatMap((s): Ev[] => {
     const rank = Math.min(9, ...(s.tournaments ?? []).map((t) => TIERS.indexOf(t.tier?.toLowerCase() || '?')).filter((r) => r >= 0))
     if (!s.begin_at || !wanted.includes(TIERS[rank])) return []
     const league = s.league?.name ?? s.videogame?.name ?? 'Esports'
     const title = s.full_name?.toLowerCase().startsWith(league.toLowerCase()) ? s.full_name : `${league} ${s.full_name ?? ''}`.trim()
     const usd = Math.max(0, ...(s.tournaments ?? []).map((t) => Number(t.prizepool?.match(/^([\d.]+) United States Dollar/)?.[1] ?? 0)))
-    const start = s.begin_at.slice(0, 10), end = s.end_at?.slice(0, 10)
-    const wiki = WIKI[s.videogame?.slug ?? '']
+    const start = s.begin_at.slice(0, 10), end = s.end_at?.slice(0, 10), wiki = WIKI[s.videogame?.slug ?? '']
     return [{
       id: `ps-${s.id}`, title, kind: 'tournament', start, end: end && end > start ? end : undefined, platforms: [], thumb: s.league?.image_url ?? '', shots: [],
       url: s.league?.url || (wiki ? `https://liquipedia.net/${wiki}/index.php?search=${encodeURIComponent(title)}` : `https://www.google.com/search?q=${encodeURIComponent(`${title} esports`)}`),
@@ -244,19 +220,16 @@ async function esports(): Promise<Ev[]> {
 
 const safe = <T,>(p: Promise<T[]>) => p.catch(() => [] as T[]) // one failing source never takes the others down
 
-/** Everything, merged and sorted by date. */
+/** Everything, merged and sorted by date, without empty fields (they would ship to every browser). */
 async function load() {
   const today = iso(new Date())
   const [upcoming, recent, wished, soon, sports] = await Promise.all([
-    safe(rawg(`${today},${shift(today, 730)}`, 5)),
-    safe(rawg(`${shift(today, -60)},${shift(today, -1)}`, 4)),
-    safe(steamList('popularwishlist', 1500)),
-    safe(steamList('popularcomingsoon', 600)),
-    safe(esports()),
+    safe(rawg(`${today},${shift(today, 730)}`, 5)), safe(rawg(`${shift(today, -60)},${shift(today, -1)}`, 4)),
+    safe(steamList('popularwishlist', 1500)), safe(steamList('popularcomingsoon', 600)), safe(esports()),
   ])
   const releases = [...new Map([...upcoming, ...recent].map((e) => [e.id, e])).values()]
   const pc = await safe(steam([...wished, ...soon], new Set(releases.map((e) => same(e.title))), today))
-  const events = [...releases, ...pc, ...sports].sort((a, b) => a.start.localeCompare(b.start))
+  const events = [...releases, ...pc, ...sports].sort((a, b) => a.start.localeCompare(b.start)).map((e) => Object.fromEntries(Object.entries(e).filter(([, v]) => v !== undefined)) as Ev)
   if (!events.length) throw new Error('No source answered')
   return { events, updated: new Date().toISOString(), sources: { rawg: releases.length, steam: pc.length, esports: sports.length } }
 }
@@ -277,9 +250,8 @@ export async function getEvents(): Promise<Payload> {
   }
 }
 
-/** A game page: RAWG slugs, or steam-<appid>-<name> for games only Steam knows. */
-export async function getGame(slug: string): Promise<Game | null> {
+/** A game page: RAWG slugs, or steam-<appid>-<name> for games only Steam knows. Once per request, however often a page asks. */
+export const getGame = cache(async (slug: string): Promise<Game | null> => {
   const steamId = slug.match(/^steam-(\d+)/)?.[1]
-  if (steamId) return steamGame(steamId)
-  return /^[a-z0-9-]+$/i.test(slug) ? rawgGame(slug) : null
-}
+  return steamId ? steamGame(steamId) : /^[a-z0-9-]+$/i.test(slug) ? rawgGame(slug) : null
+})

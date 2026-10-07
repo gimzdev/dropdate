@@ -7,16 +7,16 @@ import { Header, HomeLink, Icon } from './ui'
 export const REPO = process.env.NEXT_PUBLIC_REPO_URL || 'https://github.com/gimzdev/dropdate'
 // [endpoint, one-liner for the home page, docs description, docs example]
 export const ENDPOINTS = [
-  ['GET /api/events', 'Releases and tournaments, with plain-English search', 'Releases and tournaments, sorted by date, with smart search, filters and pagination.', '?q=ps5 releases next month&limit=10'],
-  ['GET /api/tournaments', 'Esports tournaments and prize pools', 'Esports tournaments with their prize pools. Takes the same filters as /api/events.', '?q=this week'],
-  ['GET /api/games', 'Everything about one game', 'Everything about one game: description, developers, trailer, screenshots and stores.', '?slug=cyberpunk-2077'],
-  ['GET /api/calendar.ics', 'A calendar feed you can subscribe to', 'An iCalendar feed to subscribe to. Takes the same filters as /api/events, or ?ids=a,b for specific events.', '?type=release&q=xbox'],
+  ['/api/events', 'Releases and tournaments, with plain-English search', 'Releases and tournaments, sorted by date, with smart search, filters and pagination.', '?q=ps5 releases next month&limit=10'],
+  ['/api/tournaments', 'Esports tournaments and prize pools', 'Esports tournaments with their prize pools. Takes the same filters as /api/events.', '?q=this week'],
+  ['/api/games', 'Everything about one game', 'Everything about one game: description, developers, trailer, screenshots and stores.', '?slug=cyberpunk-2077'],
+  ['/api/calendar.ics', 'A calendar feed you can subscribe to', 'An iCalendar feed to subscribe to. Takes the same filters as /api/events, or ?ids=a,b for specific events.', '?type=release&q=xbox'],
 ]
 
 /** A link: a new tab for other sites, a plain link for the API, client-side for pages. */
 export const A = ({ to, children, className }: { to: string; children: ReactNode; className?: string }) =>
   to.startsWith('/') && !to.startsWith('/api/') ? <Link href={to} className={className}>{children}</Link>
-    : <a href={to} className={className} {...(to.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>{children}</a>
+    : <a href={to} className={className} {...(to.startsWith('http') && { target: '_blank', rel: 'noopener noreferrer' })}>{children}</a>
 
 // Just enough highlighting for JSON and shell: keys, strings, numbers and the command.
 const TOKEN = /("(?:[^"\\\n]|\\.)*")(\s*:)?|(-?\b\d+(?:\.\d+)?\b)|(\$ \w+)|\b(true|false|null)\b/g
@@ -24,13 +24,10 @@ function highlight(code: string) {
   const out: ReactNode[] = []
   let last = 0, k = 0
   for (const m of code.matchAll(TOKEN)) {
-    const at = m.index ?? 0
+    const at = m.index ?? 0, [all, str, colon, num, cmd, lit] = m
     if (at > last) out.push(code.slice(last, at))
-    const [all, str, colon, num, cmd, lit] = m
     if (str) out.push(<span key={k++} className={colon ? 'text-muted' : 'text-fg'}>{str}</span>, colon ?? '')
-    else if (num) out.push(<span key={k++} className="text-mark">{num}</span>)
-    else if (cmd) out.push(<span key={k++} className="text-arena">{cmd}</span>)
-    else if (lit) out.push(<span key={k++} className="text-arena">{lit}</span>)
+    else out.push(<span key={k++} className={num ? 'text-mark' : 'text-arena'}>{num || cmd || lit}</span>)
     last = at + all.length
   }
   if (last < code.length) out.push(code.slice(last))
@@ -43,7 +40,7 @@ export const Code = ({ children, label }: { children: string; label?: string }) 
   </figure>
 )
 
-const COLUMNS: [string, [string, string][]][] = [
+const COLUMNS: [string, string[][]][] = [
   ['Calendar', [['This week', '/#week'], ['Most anticipated', '/#upcoming'], ['Esports', '/#esports'], ['Search', '/#explore']]],
   ['Developers', [['API docs', '/docs'], ['Events endpoint', '/api/events?limit=5'], ['Calendar feed', '/api/calendar.ics'], ['Data freshness', '/docs#freshness']]],
   ['Project', [['Source on GitHub', REPO], ['Terms and privacy', '/legal'], ['CC0 license', 'https://creativecommons.org/publicdomain/zero/1.0/']]],
@@ -83,9 +80,9 @@ export function ApiSection() {
           <h2 id="api-title" className="h-section">Build with the API</h2>
           <p className="lede">The same live data as free JSON and calendar feeds. No keys, no sign-up, and any website can call it.</p>
           <ul className="mt-8 divide-y divide-line/10 border-y border-line/10">
-            {ENDPOINTS.map(([name, short]) => (
-              <li key={name} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3">
-                <code className="font-mono text-[14px] text-fg">{name.replace('GET ', '')}</code>
+            {ENDPOINTS.map(([path, short]) => (
+              <li key={path} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3">
+                <code className="font-mono text-[14px] text-fg">{path}</code>
                 <span className="text-[14px] text-muted">{short}</span>
               </li>
             ))}
@@ -115,7 +112,7 @@ export function ApiSection() {
 }
 
 /** Text pages (docs, legal): a big title, an optional table of contents, sections. */
-export function Doc({ title, intro, toc, children }: { title: string; intro: string; toc?: [string, string][]; children: ReactNode }) {
+export function Doc({ title, intro, toc, children }: { title: string; intro: string; toc?: string[][]; children: ReactNode }) {
   return (
     <>
       <Header />

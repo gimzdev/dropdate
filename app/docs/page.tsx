@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   alternates: { canonical: '/docs' },
 }
 
-const TOC: [string, string][] = [['start', 'Quick start'], ['endpoints', 'Endpoints'], ['parameters', 'Parameters'], ['search', 'Smart search'], ['freshness', 'Freshness and fair use']]
+const TOC = [['start', 'Quick start'], ['endpoints', 'Endpoints'], ['parameters', 'Parameters'], ['search', 'Smart search'], ['freshness', 'Freshness and fair use']]
 const PARAMS = [
   ['q', 'Smart search: plain English plus game names, typo tolerant.'],
   ['type', 'release or tournament.'],
@@ -50,21 +50,18 @@ export default function Docs() {
 
       <DocSection id="endpoints" title="Endpoints">
         <ul className="space-y-4">
-          {ENDPOINTS.map(([name, , desc, example]) => {
-            const path = name.replace('GET ', '')
-            return (
-              <li key={name} className="rounded-panel bg-panel p-5 md:p-6">
-                <h3 className="flex flex-wrap items-center gap-3">
-                  <span className="rounded-[5px] bg-fg px-1.5 py-0.5 font-mono text-[12px] font-bold text-black">GET</span>
-                  <code className="font-mono text-[16px] font-semibold">{path}</code>
-                </h3>
-                <p className="mt-2.5 text-muted">{desc}</p>
-                <a href={`${path}${example.replace(/ /g, '%20')}`} target="_blank" rel="noopener noreferrer" className="mt-4 flex items-center justify-between gap-3 rounded-[12px] bg-raised px-4 py-3 font-mono text-[13px] text-muted transition hover:text-fg">
-                  <span className="truncate">{path}{example}</span><span className="flex shrink-0 items-center gap-1.5 font-sans text-[13px] font-semibold">Try it<Icon name="external" className="h-3.5 w-3.5" /></span>
-                </a>
-              </li>
-            )
-          })}
+          {ENDPOINTS.map(([path, , desc, example]) => (
+            <li key={path} className="rounded-panel bg-panel p-5 md:p-6">
+              <h3 className="flex flex-wrap items-center gap-3">
+                <span className="rounded-[5px] bg-fg px-1.5 py-0.5 font-mono text-[12px] font-bold text-black">GET</span>
+                <code className="font-mono text-[16px] font-semibold">{path}</code>
+              </h3>
+              <p className="mt-2.5 text-muted">{desc}</p>
+              <a href={`${path}${example.replace(/ /g, '%20')}`} target="_blank" rel="noopener noreferrer" className="mt-4 flex items-center justify-between gap-3 rounded-[12px] bg-raised px-4 py-3 font-mono text-[13px] text-muted transition hover:text-fg">
+                <span className="truncate">{path}{example}</span><span className="flex shrink-0 items-center gap-1.5 font-sans text-[13px] font-semibold">Try it<Icon name="external" className="h-3.5 w-3.5" /></span>
+              </a>
+            </li>
+          ))}
         </ul>
       </DocSection>
 

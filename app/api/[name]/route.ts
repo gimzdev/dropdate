@@ -1,0 +1,43 @@
+import { type NextRequest, NextResponse } from 'next/server'
+import { PLATFORMS, ics } from '@/lib/core'
+import { search } from '@/lib/search'
+import { getEvents, getGame, searchGames } from '@/lib/data'
+
+// The public API: /api/events, /api/tournaments, /api/games, /api/search and /api/calendar.ics
+export const dynamic = 'force-dynamic'
+
+const json = (body: unknown, cache = 'public, s-maxage=3600', status = 200) => NextResponse.json(body, { status, headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': cache } })
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ name: string }> }) {
+  const sp = req.nextUrl.searchParams, name = (await params).name
+  if (name === 'games') {
+    const slug = sp.get('slug')
+    if (!slug) return NextResponse.json({ error: 'slug is required' }, { status: 400 })
+    try {
+      const game = await getGame(slug)
+      return game ? json({ data: game }) : NextResponse.json({ error: 'not found' }, { status: 404 })
+    } catch {
+      return NextResponse.json({ error: 'upstream unavailable' }, { status: 502 })
+    }
+  }
+  // Title search across every game RAWG knows (the calendar itself only holds what is released or coming soon)
+  if (name === 'search') return json({ data: await searchGames(sp.get('q') ?? '').catch(() => []) })
+  if (name !== 'events' && name !== 'tournaments' && name !== 'calendar.ics') return NextResponse.json({ error: 'not found' }, { status: 404 })
+
+  const data = await getEvents(), type = name === 'tournaments' ? 'tournament' : sp.get('type')
+  const find = () => search(data.events, sp.get('q') ?? '', data.today, {
+    kind: type === 'release' || type === 'tournament' ? type : 'all',
+    platform: PLATFORMS.find((p) => p.toLowerCase() === sp.get('platform')?.toLowerCase()),
+    genre: sp.get('genre') ?? undefined,
+    past: sp.get('past') === 'true',
+  })
+  if (name === 'calendar.ics') {
+    if (data.error) return new NextResponse('Calendar temporarily unavailable', { status: 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': '600' } })
+    const ids = sp.get('ids')?.split(',').filter(Boolean), list = ids ? data.events.filter((e) => ids.includes(e.id)) : find().list
+    return new NextResponse(ics(list.slice(0, 500)), { headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': 'inline; filename="dropdate.ics"', 'Cache-Control': 'public, s-maxage=3600' } })
+  }
+  if (data.error) return json({ error: data.error }, 'no-store', 503)
+  const { list, parsed } = find(), { updated, stale, sources } = data
+  const limit = Math.min(200, Math.max(1, Number(sp.get('limit')) || 50)), offset = Math.max(0, Number(sp.get('offset')) || 0)
+  return json({ data: list.slice(offset, offset + limit), meta: { total: list.length, limit, offset, updated, stale, sources, understood: parsed.chips.map((c) => c.label) } }, 'public, s-maxage=3600, stale-while-revalidate=86400')
+}
