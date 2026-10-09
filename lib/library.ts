@@ -241,7 +241,7 @@ export async function exportData(user: { id: string; email: string; since: strin
   const entry = (r: GameRow, at: Date) => ({ id: r.key, title: r.title, type: r.kind, releaseDate: r.starts_on, metacritic: r.metacritic, addedAt: at.toISOString() })
   const list = (f: 'w' | 'p') => rows.filter((r) => r[f]).sort((a, b) => +b[f]! - +a[f]!).map((r) => ({ ...entry(r, r[f]!), ...(f === 'p' && { completedAt: r.c?.toISOString() ?? null }) }))
   return {
-    about: 'Everything Dropdate holds about this account: the email address, when the account was made and last used, the sign-in providers linked to it (with the identifier each one gave us), the browsers signed in, and the games you wishlisted or marked as played (each with the date and time you did it, and for a played game the date and time you marked it as completed, if you did). Nothing else is kept: no name, photo, IP address or device details. A scrambled sign-in code exists for ten minutes after you ask for one; it is not listed here because it cannot be read back.',
+    about: 'A copy of everything stored for this account: the email address, when the account was made and last used, the sign-in providers linked to it (with the identifier each one gave us), the browsers signed in, and the games you wishlisted or marked as played (each with the date and time you did it, and for a played game the date and time you marked it as completed, if you did). Nothing else is stored: no name, photo, IP address or device details. A scrambled sign-in code exists for ten minutes after you ask for one; it is not listed here because it cannot be read back.',
     exportedAt: new Date().toISOString(),
     account: {
       email: user.email, createdAt: user.since, lastUsedAt: who?.updatedAt.toISOString() ?? null,

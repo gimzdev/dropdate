@@ -49,7 +49,6 @@ export function AccountMenu({ className }: { className: string }) {
         <div id="account-menu" className="absolute top-full right-0 z-50 mt-2 w-64 rounded-2xl bg-panel p-1.5 text-fg shadow-2xl ring-1 ring-line/12 ring-inset">
           <p className="truncate px-3 pt-2 pb-2.5 text-[13px] text-dim" title={account.email}>{account.email}</p>
           <Link href="/profile" onClick={() => setOpen(false)} className={item}><Icon name="pad" />Your games</Link>
-          <Link href="/profile#data" onClick={() => setOpen(false)} className={item}><Icon name="download" />Your data</Link>
           <div className="my-1.5 border-t border-line/10" />
           <button type="button" onClick={() => void signOut()} className={item}><Icon name="logout" />Sign out</button>
         </div>

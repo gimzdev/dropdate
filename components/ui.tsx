@@ -216,7 +216,13 @@ function WishlistButton({ className, onClick }: { className: string; onClick: ()
 
 export function Header({ overHero = false }: { overHero?: boolean }) {
   const explore = useExplore()
-  const [scrolled, setScrolled] = useState(false), [open, setOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false), [open, setOpen] = useState(false), bar = useRef<HTMLElement>(null)
+  useEffect(() => { // the menu that drops down on a phone closes with a press anywhere outside the header
+    if (!open) return
+    const away = (e: Event) => { if (!bar.current?.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('pointerdown', away)
+    return () => document.removeEventListener('pointerdown', away)
+  }, [open])
   useEffect(() => {
     const onScroll = () => setScrolled(scrollY > 12)
     const onKey = (e: KeyboardEvent) => { // "/" or Ctrl/Cmd+K jumps to search, unless you're typing somewhere
@@ -235,7 +241,7 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
   const go = (intent: ExploreIntent) => { setOpen(false); explore(intent) }
 
   return (
-    <header className={`fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300 ${clear ? 'border-transparent bg-linear-to-b from-black/55 to-transparent bg-origin-border' : 'border-line/10 bg-black/85 backdrop-blur-xl'}`}>
+    <header ref={bar} className={`fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300 ${clear ? 'border-transparent bg-linear-to-b from-black/55 to-transparent bg-origin-border' : 'border-line/10 bg-black/85 backdrop-blur-xl'}`}>
       <div className="wrap flex h-16 items-center gap-2">
         <HomeLink className="flex shrink-0 items-center gap-2 rounded-lg pr-2"><Logo size={30} /><span className="display text-[23px] text-white max-[339px]:hidden">Dropdate</span></HomeLink>
         <nav aria-label="Main" className="ml-5 hidden items-center lg:flex">

@@ -164,8 +164,7 @@ export function SignIn({ next, methods, dev, failed }: { next: string; methods: 
         {dev && <p className="mt-5 rounded-xl bg-mark/10 px-4 py-3 text-[13px] text-[#ffe8a3] ring-1 ring-mark/25 ring-inset">Running on your computer without an email service: the code is printed in the terminal where Dropdate is running.</p>}
       </div>
       <p className="mt-6 text-center text-[13px] leading-relaxed text-dim">
-        New here? Your first code creates your account. By continuing you confirm you are 16 or older and accept the <Link href="/legal" className={link}>terms and privacy policy</Link>,
-        which says exactly what we keep: your email address, your lists and a few technical records.
+        New here? Your first code creates your account. By continuing you confirm you are 16 or older and accept the <Link href="/legal" className={link}>terms and privacy policy</Link>.
       </p>
     </div>
   )

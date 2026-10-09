@@ -2,17 +2,17 @@
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { deleteAccount, drop, notify, seed, setList, signOut, useAccount } from '@/lib/account'
-import { type Ev, type LibItem, TABS, type TabName, monthLabel, monthYear, status, webcal } from '@/lib/core'
+import { type Ev, type LibItem, TABS, type TabName, monthYear, status, webcal } from '@/lib/core'
 import { Heart, Icon } from './icons'
-import { Img, Open, Score, TONE, Thumb, useToday } from './ui'
+import { DateBlock, Img, Open, Score, TONE, Thumb, useToday } from './ui'
 
-// The profile: the wishlist and the games you have played, each with its Metacritic score, a tick on a played game to say you completed it, and your data.
+// The profile: the wishlist and the games you have played as a grid of cards (artwork, score, title, date), a tick on a played game to say you completed it, and at the bottom sign out, download and delete.
 
 const PAGE = 60
-const CELLS = 'grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-x-3 sm:grid-cols-[86px_minmax(0,1fr)_auto] md:grid-cols-[86px_minmax(0,1fr)_88px_92px] md:gap-x-5'
-const round = 'grid h-10 w-10 shrink-0 place-items-center rounded-full text-dim transition hover:bg-raised'
+const corner = 'grid h-10 w-10 place-items-center rounded-full bg-black/55 text-white/90 ring-1 ring-white/15 backdrop-blur-md transition ring-inset hover:bg-black/75 hover:text-white'
+const quiet = 'text-[15px] font-medium text-muted underline decoration-line/30 underline-offset-4 transition hover:text-fg'
 const platforms = (e: Ev) => e.platforms.map((p) => (p === 'PlayStation' ? 'PS' : p)).join(', ')
 
 /** Upcoming by date, then undated and "to be announced", then what is already out (newest first). */
@@ -21,36 +21,42 @@ function wishlistOrder(list: Ev[], today: string) {
   return [...list].sort((a, b) => rank(a) - rank(b) || (rank(a) === 2 ? b.start.localeCompare(a.start) : (a.start || '9').localeCompare(b.start || '9') || a.title.localeCompare(b.title)))
 }
 
-function Row({ e, list, today, done }: { e: Ev; list: TabName; today: string; done: boolean }) {
+/** A game as a card: its artwork with the score on it and the buttons in the corner, then the date (wishlist), the title and where it is out. */
+function Tile({ e, list, today, done }: { e: Ev; list: TabName; today: string; done: boolean }) {
   const esport = e.kind === 'tournament', out = !esport && !!e.start && e.start <= today, played = list === 'played'
   const s = e.start ? status(e, today) : null
-  const when = !e.start ? 'No date yet' : e.tba && e.start > today ? `${monthLabel(e.start.slice(0, 7))}, date to be announced` : s!.label
-  const meta = (played ? [e.start ? e.start.slice(0, 4) : '', platforms(e)] : [platforms(e) || e.genres[0]]).filter(Boolean) // separate items: a narrow row wraps between them, never in the middle of one
+  const when = !e.start ? 'No date yet' : e.tba && e.start > today ? 'Date to be announced' : s!.label
+  const meta = (played ? [e.start ? e.start.slice(0, 4) : '', platforms(e)] : [platforms(e) || e.genres[0]]).filter(Boolean) // separate items: a narrow card wraps between them, never in the middle of one
   const remove = played ? 'Remove from the games you have played' : 'Remove from your wishlist'
   return (
-    <li className={`${CELLS} py-3.5`}>
-      <Open e={e} className="block rounded-art"><Thumb e={e} className="aspect-[16/10] w-full rounded-lg" /></Open>
-      <div className="min-w-0">
-        <Open e={e} className="block"><h3 className="line-clamp-2 text-[15px] leading-snug font-semibold decoration-line/40 underline-offset-[3px] hover:underline">{e.title}</h3></Open>
-        <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] leading-snug">
-          {!played && <span className={`font-semibold ${s?.tone === 'live' && esport ? 'text-live' : TONE[s?.tone ?? 'future']}`}>{when}</span>}
-          {played && done && <span className="inline-flex items-center gap-1 font-semibold text-go"><Icon name="check" className="h-3.5 w-3.5" />Completed</span>}
-          {meta.map((m, i) => <span key={i} className="text-muted">{m}</span>)}
-          {!!e.metacritic && <span className="md:hidden"><Score n={e.metacritic} className="text-[13px]" /></span>}
-        </p>
-      </div>
-      <span className="hidden justify-center md:flex">{e.metacritic ? <Score n={e.metacritic} className="text-[13px]" /> : !esport && <><span aria-hidden className="text-dim">—</span><span className="sr-only">No Metacritic score</span></>}</span>
-      <div className="flex items-center justify-end">
+    <li className="group relative">
+      <Open e={e} className="block rounded-art">
+        <div className="relative aspect-[16/10] overflow-hidden rounded-art bg-raised">
+          <Thumb e={e} className="h-full w-full transition duration-500 group-hover:scale-[1.03]" />
+          {!!e.metacritic && <Score n={e.metacritic} className="absolute bottom-2.5 left-2.5" />}
+        </div>
+        <div className="mt-3 flex gap-3">
+          {!played && !!e.start && <div className="max-[359px]:hidden"><DateBlock start={e.start} tba={e.tba} /></div>}
+          <div className="min-w-0 pt-px">
+            <h3 className="line-clamp-2 text-[15px] leading-snug font-semibold decoration-line/40 underline-offset-[3px] group-hover:underline">{e.title}</h3>
+            <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] leading-snug">
+              {!played && <span className={`font-semibold ${s?.tone === 'live' && esport ? 'text-live' : TONE[s?.tone ?? 'future']}`}>{when}</span>}
+              {meta.map((m, i) => <span key={i} className="text-muted">{m}</span>)}
+            </p>
+          </div>
+        </div>
+      </Open>
+      <div className="absolute top-2.5 right-2.5 flex gap-1.5">
         {!played && out && (
-          <button type="button" title="I have played this" aria-label={`Mark ${e.title} as played`} className={`${round} hover:text-go`}
+          <button type="button" title="I have played this" aria-label={`Mark ${e.title} as played`} className={`${corner} hover:bg-go hover:text-black`}
             onClick={async () => { if (await setList('played', e.id, true)) notify(`${e.title} moved to the games you have played.`) }}><Icon name="pad" /></button>
         )}
         {played && !esport && (
           <button type="button" aria-pressed={done} title={done ? 'Completed. Tap to undo' : 'Mark as completed'} aria-label={`Completed: ${e.title}`}
-            className={done ? 'grid h-10 w-10 shrink-0 place-items-center rounded-full bg-go/15 text-go ring-1 ring-go/40 transition ring-inset hover:bg-go/25' : `${round} hover:text-go`}
+            className={done ? 'grid h-10 w-10 place-items-center rounded-full bg-go text-black transition hover:bg-go/85' : corner}
             onClick={() => void setList('completed', e.id, !done)}><Icon name={done ? 'check' : 'flag'} /></button>
         )}
-        <button type="button" title={remove} aria-label={`${remove}: ${e.title}`} className={`${round} hover:text-fg`} onClick={() => void setList(played ? 'played' : 'wishlist', e.id, false)}><Icon name="close" /></button>
+        <button type="button" title={remove} aria-label={`${remove}: ${e.title}`} className={corner} onClick={() => void setList(played ? 'played' : 'wishlist', e.id, false)}><Icon name="close" /></button>
       </div>
     </li>
   )
@@ -64,9 +70,13 @@ const ADD: Record<TabName, { label: string; placeholder: string; button: string 
 
 interface Found { key: string; slug: string; title: string; released?: string; thumb: string; metacritic?: number }
 
-/** Search every game and put one on a list: the way to add what the calendar does not hold (older games, mostly). */
+/**
+ * Search every game and put one on a list: the way to add what the calendar does not hold (older games, mostly). The answers drop down
+ * over the page under the box, so closing them moves nothing: a press or a Tab anywhere outside the box shuts them, and the box opens them again.
+ */
 function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; has: (key: string) => boolean; onAdded: (e: Ev) => void }) {
-  const [q, setQ] = useState(''), [found, setFound] = useState<Found[] | null>(null), [failed, setFailed] = useState(false), [adding, setAdding] = useState('')
+  const [q, setQ] = useState(''), [found, setFound] = useState<Found[] | null>(null), [failed, setFailed] = useState(false), [adding, setAdding] = useState(''), [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null), field = useRef<HTMLInputElement>(null)
   useEffect(() => {
     const term = q.trim()
     setFailed(false)
@@ -81,6 +91,21 @@ function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; 
     }, 250)
     return () => { clearTimeout(t); ctl.abort() }
   }, [q])
+  // While the answers are down, a press or the keyboard landing anywhere outside the box closes them (focusin, not blur: a click on a result must not close it first)
+  useEffect(() => {
+    if (!open) return
+    const away = (e: Event) => { if (!box.current?.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('pointerdown', away)
+    document.addEventListener('focusin', away)
+    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('focusin', away) }
+  }, [open])
+  const shown = open && (failed || found !== null)
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Escape') return
+    if (e.target !== field.current) { setOpen(false); field.current?.focus() } // from a result, back to the box
+    else if (shown) { e.preventDefault(); setOpen(false) } // the first Escape shuts the answers, the next one empties the box
+    else setQ('')
+  }
 
   async function add(f: Found) {
     setAdding(f.key)
@@ -91,42 +116,46 @@ function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; 
   }
   const term = q.trim()
   return (
-    <div className="mt-8">
+    <div ref={box} onKeyDown={onKey} className="mt-8">
       <label htmlFor="add-game" className="sr-only">{ADD[list].label}</label>
       <div className="relative">
         <Icon name="search" className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-dim" />
-        <input id="add-game" type="search" autoComplete="off" spellCheck={false} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') setQ('') }}
+        <input ref={field} id="add-game" type="search" autoComplete="off" spellCheck={false} value={q} onChange={(e) => { setQ(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} onClick={() => setOpen(true)}
           placeholder={ADD[list].placeholder}
           className="h-12 w-full rounded-full bg-panel pr-4 pl-11 text-[16px] ring-1 ring-line/12 ring-inset transition placeholder:text-dim" />
-      </div>
-      <div aria-live="polite">
-        {failed && <p className="mt-3 px-2 text-[15px] text-muted">The search is unavailable right now. Try again in a moment.</p>}
-        {found && !found.length && <p className="mt-3 px-2 text-[15px] text-muted">No game found for “{term}”.</p>}
-        {found && found.length > 0 && (
-          <ul className="mt-3 divide-y divide-line/10 overflow-hidden rounded-2xl bg-panel ring-1 ring-line/10 ring-inset">
-            {found.map((f) => {
-              const here = has(f.key), unreleased = list !== 'wishlist' && (!f.released || f.released > today)
-              return (
-                <li key={f.key} className="flex items-center gap-3 px-3 py-2.5 sm:px-4">
-                  {f.thumb ? <Img src={f.thumb} className="aspect-[16/10] w-16 rounded-md" /> : <span className="block aspect-[16/10] w-16 shrink-0 rounded-md bg-raised" />}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[15px] font-semibold">{f.title}</p>
-                    <p className="mt-0.5 flex items-center gap-2 text-[13px] text-muted">{f.released ? f.released.slice(0, 4) : 'Not announced'}{!!f.metacritic && <Score n={f.metacritic} />}</p>
-                  </div>
-                  {here ? <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-go"><Icon name="check" />Added</span>
-                    : unreleased ? <span className="shrink-0 text-sm text-dim">Not out yet</span>
-                      : <button type="button" disabled={adding === f.key} onClick={() => void add(f)} aria-label={`${ADD[list].button}: ${f.title}`} className="btn btn-line btn-sm shrink-0">{adding === f.key ? 'Adding…' : ADD[list].button}</button>}
-                </li>
-              )
-            })}
-          </ul>
-        )}
+        <div aria-live="polite">
+          {shown && (
+            <div className="absolute inset-x-0 top-full z-30 mt-2 max-h-[min(34rem,70svh)] overflow-y-auto overscroll-contain rounded-2xl bg-panel shadow-[0_24px_60px_-20px_rgb(0_0_0/0.9)] ring-1 ring-line/12 ring-inset">
+              {failed && <p className="px-4 py-3.5 text-[15px] text-muted">The search is unavailable right now. Try again in a moment.</p>}
+              {found && !found.length && <p className="px-4 py-3.5 text-[15px] text-muted">No game found for “{term}”.</p>}
+              {found && found.length > 0 && (
+                <ul className="divide-y divide-line/10">
+                  {found.map((f) => {
+                    const here = has(f.key), unreleased = list !== 'wishlist' && (!f.released || f.released > today)
+                    return (
+                      <li key={f.key} className="flex items-center gap-3 px-3 py-2.5 sm:px-4">
+                        {f.thumb ? <Img src={f.thumb} className="aspect-[16/10] w-16 rounded-md" /> : <span className="block aspect-[16/10] w-16 shrink-0 rounded-md bg-raised" />}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[15px] font-semibold">{f.title}</p>
+                          <p className="mt-0.5 flex items-center gap-2 text-[13px] text-muted">{f.released ? f.released.slice(0, 4) : 'Not announced'}{!!f.metacritic && <Score n={f.metacritic} />}</p>
+                        </div>
+                        {here ? <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-go"><Icon name="check" />Added</span>
+                          : unreleased ? <span className="shrink-0 text-sm text-dim">Not out yet</span>
+                            : <button type="button" disabled={adding === f.key} onClick={() => void add(f)} aria-label={`${ADD[list].button}: ${f.title}`} className="btn btn-line btn-sm shrink-0">{adding === f.key ? 'Adding…' : ADD[list].button}</button>}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-/** Download everything held about the account as a file. */
+/** Download a copy of the account as a file. */
 async function download() {
   try {
     const res = await fetch('/api/me/export', { cache: 'no-store' })
@@ -145,15 +174,17 @@ async function download() {
 function DeleteAccount() {
   const [step, setStep] = useState<'closed' | 'ask' | 'busy'>('closed'), [failed, setFailed] = useState(false), keep = useRef<HTMLButtonElement>(null)
   useEffect(() => { if (step === 'ask') keep.current?.focus() }, [step])
-  if (step === 'closed') return <button type="button" onClick={() => setStep('ask')} className="mt-8 text-[15px] font-medium text-muted underline decoration-line/30 underline-offset-4 transition hover:text-fg hover:decoration-live">Delete my account</button>
+  if (step === 'closed') return <button type="button" onClick={() => setStep('ask')} className={`${quiet} hover:decoration-live`}>Delete my account</button>
   return (
-    <div role="group" aria-labelledby="delete-title" className="mt-8 max-w-xl rounded-panel bg-live/10 p-5 ring-1 ring-live/30 ring-inset md:p-6">
-      <h3 id="delete-title" className="text-lg font-semibold">Delete your account?</h3>
-      <p className="mt-2 text-[15px] text-[#ffd0d4]">This erases your email address, your wishlist and the games you have played, with the ones you completed, for good. It cannot be undone and we cannot bring it back. Download your data first if you want a copy.</p>
-      {failed && <p role="alert" className="mt-3 text-[15px] font-semibold text-[#ffb7be]">Could not delete the account. Check your connection and try again.</p>}
-      <div className="mt-5 flex flex-wrap gap-3">
-        <button type="button" disabled={step === 'busy'} onClick={async () => { setStep('busy'); setFailed(false); if (!(await deleteAccount())) { setFailed(true); setStep('ask') } }} className="btn bg-live text-black hover:bg-[#ff6e7e]">{step === 'busy' ? 'Deleting…' : 'Delete everything'}</button>
-        <button ref={keep} type="button" disabled={step === 'busy'} onClick={() => { setStep('closed'); setFailed(false) }} className="btn btn-line">Keep my account</button>
+    <div className="basis-full pt-2">
+      <div role="group" aria-labelledby="delete-title" className="max-w-xl rounded-panel bg-live/10 p-5 ring-1 ring-live/30 ring-inset md:p-6">
+        <h3 id="delete-title" className="text-lg font-semibold">Delete your account?</h3>
+        <p className="mt-2 text-[15px] text-[#ffd0d4]">This erases your email address, your wishlist and the games you have played, with the ones you completed, for good. It cannot be undone and we cannot bring it back. Download your data first if you want a copy.</p>
+        {failed && <p role="alert" className="mt-3 text-[15px] font-semibold text-[#ffb7be]">Could not delete the account. Check your connection and try again.</p>}
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button type="button" disabled={step === 'busy'} onClick={async () => { setStep('busy'); setFailed(false); if (!(await deleteAccount())) { setFailed(true); setStep('ask') } }} className="btn bg-live text-black hover:bg-[#ff6e7e]">{step === 'busy' ? 'Deleting…' : 'Delete everything'}</button>
+          <button ref={keep} type="button" disabled={step === 'busy'} onClick={() => { setStep('closed'); setFailed(false) }} className="btn btn-line">Keep my account</button>
+        </div>
       </div>
     </div>
   )
@@ -182,7 +213,7 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
     const list = keys[tab].flatMap((k) => known.get(k) ?? [])
     return tab === 'wishlist' ? wishlistOrder(list, today) : list
   }, [keys, tab, known, today])
-  const counts = { wishlist: keys.wishlist.length, played: keys.played.length, completed: keys.completed.length }
+  const counts = { wishlist: keys.wishlist.length, played: keys.played.length }
   const finished = useMemo(() => new Set(keys.completed), [keys.completed])
 
   const pick = (t: TabName) => { setTab(t); setLimit(PAGE); history.replaceState(null, '', t === 'wishlist' ? '/profile' : `/profile?tab=${t}`) }
@@ -221,20 +252,15 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
       <section aria-label={{ wishlist: 'Your wishlist', played: 'Games you have played' }[tab]} className="mt-10">
         {rows.length > 0 ? (
           <>
-            {tab === 'played' && (counts.completed
-              ? <p className="mb-4 text-[14px] text-dim">{counts.completed} of {counts.played} completed</p>
-              : <p className="mb-4 text-[14px] text-dim">Finished one? Tap the <Icon name="flag" className="inline h-3.5 w-3.5 align-[-2px]" /><span className="sr-only"> flag</span> on its row to mark it completed.</p>)}
-            <div className={`${CELLS} hidden border-b border-line/10 pb-2.5 text-[13px] font-medium text-dim md:grid`}>
-              <span className="col-span-2">Game</span><span className="text-center">Metacritic</span><span />
-            </div>
-            <ul className="divide-y divide-line/10">
-              {rows.slice(0, limit).map((e) => <Row key={`${tab}-${e.id}`} e={e} list={tab} today={today} done={finished.has(e.id)} />)}
+            <ul className="grid grid-cols-2 gap-x-3.5 gap-y-8 sm:grid-cols-3 sm:gap-x-5 lg:grid-cols-4">
+              {rows.slice(0, limit).map((e) => <Tile key={`${tab}-${e.id}`} e={e} list={tab} today={today} done={finished.has(e.id)} />)}
             </ul>
-            {rows.length > limit && <div className="mt-8 text-center"><button type="button" onClick={() => setLimit((l) => l + PAGE * 2)} className="btn btn-line px-7">Show more<span className="text-muted">{rows.length - limit} left</span></button></div>}
+            {rows.length > limit && <div className="mt-10 text-center"><button type="button" onClick={() => setLimit((l) => l + PAGE * 2)} className="btn btn-line px-7">Show more<span className="text-muted">{rows.length - limit} left</span></button></div>}
           </>
         ) : (
           <div className="rounded-panel border border-dashed border-line/12 px-6 py-14 text-center">
-            <p className="text-lg font-semibold">{empty[0]}</p>
+            <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-raised text-muted">{tab === 'wishlist' ? <Heart on={false} className="h-6 w-6" /> : <Icon name="pad" className="h-6 w-6" />}</span>
+            <p className="mt-5 text-lg font-semibold">{empty[0]}</p>
             <p className="mx-auto mt-2 max-w-sm text-muted">{empty[1]}</p>
             <Link href="/#explore" className="btn btn-mark mt-7">Browse the calendar</Link>
           </div>
@@ -259,17 +285,13 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
         </div>
       )}
 
-      <section id="data" aria-labelledby="data-title" className="mt-20 border-t border-line/10 pt-12">
-        <h2 id="data-title" className="display text-[2.1rem] md:text-[2.5rem]">Your data</h2>
-        <p className="prose-dd mt-4 max-w-2xl">
-          Dropdate keeps your email address, your wishlist and played games with the date and time you added each one (and when you completed it), and the dates you were signed in. No name, no photo, no IP address, no device details.
-          You can take it all with you or erase it at any time. <Link href="/legal#privacy">Read how your data is handled</Link>.
-        </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <button type="button" onClick={() => void download()} className="btn btn-line"><Icon name="download" />Download my data</button>
+      <section id="account" aria-labelledby="account-title" className="mt-20 border-t border-line/10 pt-8">
+        <h2 id="account-title" className="sr-only">Your account</h2>
+        <div className="flex flex-wrap items-center gap-x-7 gap-y-4">
           <button type="button" onClick={() => void signOut()} className="btn btn-line"><Icon name="logout" />Sign out</button>
+          <button type="button" onClick={() => void download()} className={quiet}>Download my data</button>
+          <DeleteAccount />
         </div>
-        <DeleteAccount />
       </section>
     </>
   )

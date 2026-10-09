@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { type KeyboardEvent, type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { type KeyboardEvent, type ReactNode, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { type Ev, type Kind, type Payload, type Platform, PLATFORMS, browseHref, gap, googleUrl, href, iso, longDate, monthLabel, monthShort, range, shift, srcSet, status, toDate, webcal, weekday } from '@/lib/core'
 import { type Chip, removeChip, search } from '@/lib/search'
 import { BigDate, Card, Circled, Countdown, DateBlock, EXPLORE_EVENT, type ExploreIntent, Heart, Icon, Img, Open, SaveButton, Score, Section, Select, Thumb, Updated, fallback, useExplore, useSaved, useSwipe, useToday } from './ui'
@@ -465,6 +465,16 @@ export function Explorer({ data }: { data: Payload }) {
 function SearchBox({ value, query, onChange, events, today, chips, text }: { value: string; query: string; onChange: (v: string) => void; events: Ev[]; today: string; chips: Chip[]; text: string }) {
   const router = useRouter()
   const [focus, setFocus] = useState(false), [active, setActive] = useState(-1)
+  const wrap = useRef<HTMLDivElement>(null), field = useRef<HTMLInputElement>(null), blurred = useRef<ReturnType<typeof setTimeout>>(undefined)
+  // Suggestions are open while the box has the focus. A press anywhere else lets go of it, which closes them: a phone does not move the focus
+  // when you tap a part of the page that does nothing, so the box is told to let go.
+  useEffect(() => {
+    if (!focus) return
+    const away = (e: Event) => { if (!wrap.current?.contains(e.target as Node)) field.current?.blur() }
+    document.addEventListener('pointerdown', away)
+    return () => document.removeEventListener('pointerdown', away)
+  }, [focus])
+  useEffect(() => () => clearTimeout(blurred.current), [])
   // Suggestions only when part of the query names a game: a pure filter ("ps5 next month") is answered by the grid, and its chips stay in view
   const local = useMemo(() => (text.trim() ? search(events, query, today, { from: '0000-01-01', to: '9999-12-31' }).list.sort((a, b) => b.pop - a.pop).slice(0, 6) : []), [events, query, today, text])
   // The calendar only holds what is out recently or coming, so titles it lacks (older and long-running games) are looked up by name
@@ -497,9 +507,9 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
 
   return (
     <div className="max-w-3xl">
-      <div className="relative">
+      <div ref={wrap} className="relative">
         <Icon name="search" className="pointer-events-none absolute top-1/2 left-5 h-5 w-5 -translate-y-1/2 text-muted" />
-        <input id="search-input" value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onFocus={() => setFocus(true)} onBlur={() => setTimeout(() => setFocus(false), 120)}
+        <input ref={field} id="search-input" value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onFocus={() => { clearTimeout(blurred.current); setFocus(true) }} onBlur={() => { blurred.current = setTimeout(() => setFocus(false), 120) }}
           role="combobox" aria-expanded={expanded} aria-controls="search-results" aria-autocomplete="list" aria-activedescendant={expanded && active >= 0 ? (hits[active] ? `hit-${hits[active].id}` : 'hit-browse') : undefined}
           aria-label="Search games and tournaments" autoComplete="off" spellCheck={false} enterKeyHint="search" placeholder="Search games, platforms or dates"
           className={`h-14 w-full rounded-full bg-panel pl-14 text-base text-fg ring-1 ring-line/12 transition outline-none ring-inset placeholder:text-dim hover:ring-line/25 focus:ring-2 focus:ring-mark sm:h-16 sm:text-[17px] ${value ? 'pr-24' : 'pr-5 sm:pr-14'}`} />
