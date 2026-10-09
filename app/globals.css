@@ -4,7 +4,7 @@
 @custom-variant touch (@media (hover: none));
 /* Short windows (laptops at 125%, phones in landscape): the hero drops its optional extras */
 @custom-variant short (@media (max-height: 700px));
-/* A browser that signed in before: the page head marks <html data-signed> before the first paint, so the header shows the right control straight away */
+/* A browser that signed in before (<html data-signed>, set before the first paint): the header shows the right control at once */
 @custom-variant signed (&:where([data-signed] *));
 
 /*
@@ -88,8 +88,7 @@
   .prose-dd { @apply space-y-4 text-[16px] leading-relaxed text-muted; }
   .prose-dd strong { @apply font-semibold text-fg; }
   .prose-dd a { @apply text-fg underline decoration-line/30 underline-offset-4 transition hover:decoration-mark; }
-  /* A horizontally scrolling row that runs to both edges of the screen while its first item lines up with the page */
-  /* (scroll-padding percentages refer to the row itself, so the snap offset is spelled out per breakpoint to match .wrap) */
+  /* A sideways row running to both screen edges, its first item lined up with the page (snap offsets match .wrap per breakpoint) */
   .bleed { margin-inline: calc(50% - 50vw); padding-inline: calc(50vw - 50%); scroll-padding-inline: 1rem; }
   @media (min-width: 40rem) { .bleed { scroll-padding-inline: 1.5rem; } }
   @media (min-width: 64rem) { .bleed { scroll-padding-inline: max(2.5rem, calc((100vw - 1280px) / 2)); } }

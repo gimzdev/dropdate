@@ -3,15 +3,15 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type AnchorHTMLAttributes, type ReactNode, type SyntheticEvent, type TouchEvent, useEffect, useRef, useState } from 'react'
-import { useSaved } from '@/lib/account'
-import { ACCOUNTS, type Ev, ago, href, iso, longDate, monthLabel, monthShort, scoreTone, status, toDate, weekday } from '@/lib/core'
-import { AccountMenu } from './account'
+import { drop, useSaved } from '@/lib/account'
+import { ACCOUNTS, type Ev, type Found, PLATFORMS, type Platform, ago, href, iso, longDate, monthLabel, monthShort, scoreTone, status, toDate, webcal, weekday } from '@/lib/core'
+import { AccountMenu, useOutside } from './account'
 import { Heart, Icon } from './icons'
 import { Logo } from './logo'
 
-export { Heart, Icon, useSaved }
+export { Heart, Icon, useOutside, useSaved }
 
-// ── Marks ───────────────────────────────────────────────────────────────
+// ── Marks ──
 
 /** The loop you draw around a date on a wall calendar. It marks today, and nothing else. */
 export const Circled = ({ className = '' }: { className?: string }) => (
@@ -20,7 +20,7 @@ export const Circled = ({ className = '' }: { className?: string }) => (
   </svg>
 )
 
-// ── State shared across the page ───────────────────────────────────────
+// ── State shared across the page ──
 
 /** Pages are rendered on the server with its date; the browser then switches to the visitor's own today. */
 export function useToday(server: string) {
@@ -54,6 +54,25 @@ export function useSwipe(go: (d: number) => void, min: number) {
   }
 }
 
+/** Games RAWG knows by the name `q` ('' = none), asked once typing pauses; the last answer stays while the next loads. */
+export function useLookup(q: string) {
+  const [found, setFound] = useState<Found[] | null>(null), [failed, setFailed] = useState(false)
+  useEffect(() => {
+    setFailed(false)
+    if (!q) return setFound(null)
+    const ctl = new AbortController()
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: ctl.signal })
+        if (!res.ok) { drop(res); throw new Error(String(res.status)) }
+        setFound(((await res.json()) as { data: Found[] }).data)
+      } catch { if (!ctl.signal.aborted) { setFound(null); setFailed(true) } }
+    }, 250)
+    return () => { clearTimeout(t); ctl.abort() }
+  }, [q])
+  return { found, failed }
+}
+
 // Jumping to the calendar section from anywhere: search, the wishlist, a given day
 export interface ExploreIntent { list?: boolean; day?: string; focus?: boolean }
 export const EXPLORE_EVENT = 'dropdate:explore'
@@ -75,7 +94,7 @@ export function useExplore() {
   }
 }
 
-// ── Small pieces ────────────────────────────────────────────────────────
+// ── Small pieces ──
 
 type OpenProps = { e: Pick<Ev, 'slug' | 'url'>; className?: string; children: ReactNode } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'className' | 'children'>
 /** A game opens its page here; a tournament opens its own page in a new tab. */
@@ -136,8 +155,7 @@ export function SaveButton({ id, title, label, variant = 'art', needsAccount }: 
       ev.preventDefault()
       ev.stopPropagation()
       const signIn = () => router.push(`/signin?next=${encodeURIComponent(location.pathname + location.search)}`) // back to the same filters, not only the same page
-      // a game the calendar does not hold can only be kept in an account
-      if (needsAccount && !signedIn && phase !== 'loading') return signIn()
+      if (needsAccount && !signedIn && phase !== 'loading') return signIn() // a game the calendar does not hold can only be kept in an account
       setBump((n) => n + 1)
       void toggle(id, needsAccount).then((done) => { if (!done) signIn() })
     },
@@ -186,7 +204,49 @@ export function Select<T extends string>({ label, value, onChange, options, clas
   )
 }
 
-// ── Header ──────────────────────────────────────────────────────────────
+/** The sticky bar of filters under a search box: it scrolls sideways on narrow screens, `end` stays put on the right. */
+export function FilterBar({ children, end }: { children: ReactNode; end: ReactNode }) {
+  return (
+    <div className="sticky top-[65px] z-30 -mx-4 mt-8 border-y border-line/10 bg-black/85 px-4 py-2.5 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:top-[76px] lg:mx-0 lg:rounded-full lg:border lg:px-2.5 lg:py-2">
+      <div className="flex items-center gap-3">
+        <div className="no-scrollbar -my-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1 [mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] xl:[mask-image:none]">{children}</div>
+        {end}
+      </div>
+    </div>
+  )
+}
+export const Sep = () => <span aria-hidden className="mx-1 h-6 w-px shrink-0 bg-line/12" />
+/** One platform at a time; pressing the chosen one again clears it. */
+export const PlatformPills = ({ value, onChange }: { value: string; onChange: (p: Platform | '') => void }) => (
+  <div role="group" aria-label="Platform" className="flex shrink-0 gap-1.5">
+    {PLATFORMS.map((p) => <button key={p} type="button" onClick={() => onChange(value === p ? '' : p)} aria-pressed={value === p} className="pill">{p}</button>)}
+  </div>
+)
+
+/** A live calendar feed: Google Calendar, Apple or Outlook, or the link to copy. */
+export function FeedPanel({ feed, title, as: H = 'h3', className, children }: { feed: string; title: ReactNode; as?: 'h2' | 'h3'; className: string; children: ReactNode }) {
+  const [copied, setCopied] = useState(''), done = !!copied && copied === feed
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(feed) } catch { return void prompt('Calendar feed link', feed) }
+    setCopied(feed)
+    setTimeout(() => setCopied(''), 2200)
+  }
+  return (
+    <div className={`${className} grid grid-cols-1 gap-6 rounded-panel bg-panel p-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:p-8`}>
+      <div className="flex gap-4">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-mark text-black"><Icon name="calendar" className="h-6 w-6" /></span>
+        <div><H className="text-lg font-semibold">{title}</H>{children}</div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <a href={feed ? `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal(feed))}` : undefined} target="_blank" rel="noopener noreferrer" className="btn btn-mark">Google Calendar</a>
+        <a href={feed ? webcal(feed) : undefined} className="btn btn-line">Apple or Outlook</a>
+        <button type="button" onClick={copy} disabled={!feed} className="btn btn-line"><Icon name={done ? 'check' : 'copy'} />{done ? 'Link copied' : 'Copy link'}</button>
+      </div>
+    </div>
+  )
+}
+
+// ── Header ──
 
 /** The logo: on the home page it scrolls to the very top (clearing any #section or ?search); anywhere else it goes home. */
 export function HomeLink({ className, children }: { className?: string; children: ReactNode }) {
@@ -202,7 +262,7 @@ export function HomeLink({ className, children }: { className?: string; children
 
 const NAV = [['This week', '/#week'], ['Upcoming', '/#upcoming'], ['Esports', '/#esports'], ['Calendar', '/#explore'], ['Browse', '/browse'], ['API', '/docs']]
 
-/** With accounts the wishlist lives in the profile. Without them there is no profile, so it keeps a button here that opens it in the calendar. */
+/** Without accounts there is no profile: the wishlist opens in the calendar. */
 function WishlistButton({ className, onClick }: { className: string; onClick: () => void }) {
   const { ids } = useSaved()
   return (
@@ -217,12 +277,7 @@ function WishlistButton({ className, onClick }: { className: string; onClick: ()
 export function Header({ overHero = false }: { overHero?: boolean }) {
   const explore = useExplore()
   const [scrolled, setScrolled] = useState(false), [open, setOpen] = useState(false), bar = useRef<HTMLElement>(null)
-  useEffect(() => { // the menu that drops down on a phone closes with a press anywhere outside the header
-    if (!open) return
-    const away = (e: Event) => { if (!bar.current?.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('pointerdown', away)
-    return () => document.removeEventListener('pointerdown', away)
-  }, [open])
+  useOutside(bar, open, () => setOpen(false)) // the menu that drops down on a phone closes with a press anywhere outside the header
   useEffect(() => {
     const onScroll = () => setScrolled(scrollY > 12)
     const onKey = (e: KeyboardEvent) => { // "/" or Ctrl/Cmd+K jumps to search, unless you're typing somewhere
@@ -234,7 +289,6 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
     addEventListener('scroll', onScroll, { passive: true })
     addEventListener('keydown', onKey)
     return () => { removeEventListener('scroll', onScroll); removeEventListener('keydown', onKey) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const clear = overHero && !scrolled && !open // see-through over the hero artwork
   const ctl = `btn btn-sm ${clear ? 'btn-glass' : 'btn-line'}`
@@ -266,7 +320,7 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
   )
 }
 
-// ── Card ────────────────────────────────────────────────────────────────
+// ── Card ──
 
 /** The Metacritic score as a coloured tag, just the number: green from 75, yellow from 50, red below. Screen readers hear what it is. */
 export function Score({ n, className = '' }: { n: number; className?: string }) {
@@ -276,20 +330,28 @@ export function Score({ n, className = '' }: { n: number; className?: string }) 
 // Out today in green (a live tournament in red), the coming week in yellow, later in grey
 export const TONE = { live: 'text-go', soon: 'text-mark', future: 'text-muted', past: 'text-dim' }
 
+type Shots = Record<string, string[]>
+let shotMap: Promise<Shots> | undefined
+/** The home page leaves screenshots out of its payload (most of its weight): they come in one go, once the page is idle on a screen that can hover. */
+const loadShots = () => (shotMap ??= fetch('/api/shots').then((r): Promise<Shots> | Shots => (r.ok ? r.json() : {})).catch((): Shots => { shotMap = undefined; return {} }))
+export const warmShots = () => { if (matchMedia('(hover: hover)').matches) (window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 1500)))(() => void loadShots()) }
+
 /**
- * An event as a card. With `row`, phones get a compact row (artwork beside the date) so long lists stay scannable. `when` replaces the
- * words under the title (browsing an archive says "2015", not "Out now"). `outside` marks a game the calendar does not hold: it can only be kept in an account.
+ * An event as a card. `row`: a compact row on phones. `when` replaces the status ("2015", not "Out now"). `outside`: a game the calendar
+ * does not hold, kept only in an account. `lazy`: its screenshots were left out of the page and load on first hover.
  */
-export function Card({ e, today, row, when, outside }: { e: Ev; today: string; row?: boolean; when?: string; outside?: boolean }) {
-  const esport = e.kind === 'tournament', s = status(e, today), frames = !esport && e.thumb ? [e.thumb, ...e.shots] : []
-  const [frame, setFrame] = useState(0), timer = useRef<ReturnType<typeof setInterval>>(undefined)
-  useEffect(() => () => clearInterval(timer.current), [])
-  const play = () => { // hovering a game flips through its screenshots
-    if (frames.length < 2 || timer.current) return
+export function Card({ e, today, row, when, outside, lazy }: { e: Ev; today: string; row?: boolean; when?: string; outside?: boolean; lazy?: boolean }) {
+  const esport = e.kind === 'tournament', s = status(e, today)
+  const [shots, setShots] = useState<string[]>(), [on, setOn] = useState(false), [frame, setFrame] = useState(0)
+  const frames = !esport && e.thumb ? [e.thumb, ...(shots ?? e.shots)] : []
+  useEffect(() => { // hovering a game flips through its screenshots
+    if (!on || frames.length < 2) return setFrame(0)
     setFrame(1)
-    timer.current = setInterval(() => setFrame((n) => (n + 1) % frames.length), 1100)
-  }
-  const stop = () => { clearInterval(timer.current); timer.current = undefined; setFrame(0) }
+    const t = setInterval(() => setFrame((n) => (n + 1) % frames.length), 1100)
+    return () => clearInterval(t)
+  }, [on, frames.length])
+  const play = () => { setOn(true); if (lazy && !shots && frames.length) void loadShots().then((m) => setShots(m[e.id] ?? [])) }
+  const stop = () => setOn(false)
 
   return (
     <article className="group relative" onMouseEnter={play} onMouseLeave={stop}>
@@ -325,7 +387,7 @@ export function Card({ e, today, row, when, outside }: { e: Ev; today: string; r
   )
 }
 
-// ── Countdown ───────────────────────────────────────────────────────────
+// ── Countdown ──
 
 export function Countdown({ start, today, className = '' }: { start: string; today: string; className?: string }) {
   const now = useNow(3e4), day = now === undefined ? today : iso(new Date(now)) // flips to "Out today" at midnight without a reload

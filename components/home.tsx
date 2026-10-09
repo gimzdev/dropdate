@@ -3,15 +3,19 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type KeyboardEvent, type ReactNode, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { type Ev, type Kind, type Payload, type Platform, PLATFORMS, browseHref, gap, googleUrl, href, iso, longDate, monthLabel, monthShort, range, shift, srcSet, status, toDate, webcal, weekday } from '@/lib/core'
+import { type Ev, type Kind, type Payload, type Platform, browseHref, gap, googleUrl, href, iso, longDate, monthLabel, monthShort, range, shift, srcSet, status, toDate, weekday } from '@/lib/core'
 import { type Chip, removeChip, search } from '@/lib/search'
-import { BigDate, Card, Circled, Countdown, DateBlock, EXPLORE_EVENT, type ExploreIntent, Heart, Icon, Img, Open, SaveButton, Score, Section, Select, Thumb, Updated, fallback, useExplore, useSaved, useSwipe, useToday } from './ui'
+import {
+  BigDate, Card, Circled, Countdown, DateBlock, EXPLORE_EVENT, type ExploreIntent, FeedPanel, FilterBar, Heart, Icon, Img, Open, PlatformPills, SaveButton, Score, Section, Select, Sep,
+  Thumb, Updated, fallback, useExplore, useLookup, useOutside, useSaved, useSwipe, useToday, warmShots,
+} from './ui'
 
-// The home page: the biggest upcoming releases one at a time, the week ahead as a wall calendar, the most
-// anticipated games, the month's biggest launches, the esports schedule and the searchable calendar.
+// The home page: the biggest upcoming releases, the week ahead as a wall calendar, the most anticipated games, the month's biggest
+// launches, the esports schedule and the searchable calendar.
 
 const underline = 'decoration-line/40 underline-offset-[3px] group-hover:underline'
 const plural = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`
+const empty = 'rounded-panel border border-dashed border-line/12 px-6 text-center'
 
 export function Hero({ slides, today: serverToday }: { slides: Ev[]; today: string }) {
   const today = useToday(serverToday), n = slides.length
@@ -34,7 +38,6 @@ export function Hero({ slides, today: serverToday }: { slides: Ev[]; today: stri
     if (paused || n < 2) return
     const t = setTimeout(() => go(i + 1), 7000)
     return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [i, paused, n])
 
   if (!n) return (
@@ -47,7 +50,7 @@ export function Hero({ slides, today: serverToday }: { slides: Ev[]; today: stri
   )
   const s = slides[i]
   return (
-    // Rotation holds only while the pointer is over a link or button, or while keyboard focus is in the slide (not after a click, which leaves focus behind)
+    // rotation holds while the pointer is over a link or button, or keyboard focus is in the slide (not after a click)
     <section aria-roledescription="carousel" aria-label="Biggest upcoming releases" className="relative isolate overflow-hidden text-white" {...swipe}
       onPointerOver={(ev) => setHover(ev.pointerType !== 'touch' && !!(ev.target as Element).closest('a,button'))} onPointerLeave={() => setHover(false)}
       onFocus={(ev) => setFocus(ev.target.matches(':focus-visible'))} onBlur={() => setFocus(false)}>
@@ -302,10 +305,10 @@ export function Explorer({ data }: { data: Payload }) {
   const [today, setToday] = useState(data.today), [origin, setOrigin] = useState(''), [q, setQ] = useState('')
   const [kind, setKind] = useState<Kind | 'all'>('all'), [platform, setPlatform] = useState<Platform | 'all'>('all'), [genre, setGenre] = useState('all')
   const [sort, setSort] = useState<keyof typeof SORTS>('date'), [view, setView] = useState<'grid' | 'calendar'>('grid'), [onlySaved, setOnlySaved] = useState(false)
-  const [month, setMonth] = useState(data.today.slice(0, 7)), [day, setDay] = useState<string>(), [limit, setLimit] = useState(PAGE), [copied, setCopied] = useState('')
+  const [month, setMonth] = useState(data.today.slice(0, 7)), [day, setDay] = useState<string>(), [limit, setLimit] = useState(PAGE)
   const query = useDeferredValue(q) // typing stays instant while the results catch up
 
-  useEffect(() => { // the page can be an hour old: use the visitor's own today, then ?q= and whatever the header or the week asked for
+  useEffect(() => { // the visitor's own today, then ?q= and whatever the header or the week asked for
     const apply = ({ list, day: d }: ExploreIntent) => {
       if (list) { setOnlySaved(true); setView('grid') }
       if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) { setView('calendar'); setMonth(d.slice(0, 7)); setDay(d) }
@@ -318,6 +321,7 @@ export function Explorer({ data }: { data: Payload }) {
     apply({ list: p.has('list'), day: p.get('day') ?? undefined })
     if (p.has('focus')) setTimeout(() => document.getElementById('search-input')?.focus(), 300)
     const on = (ev: Event) => apply((ev as CustomEvent<ExploreIntent>).detail ?? {})
+    warmShots()
     addEventListener(EXPLORE_EVENT, on)
     return () => removeEventListener(EXPLORE_EVENT, on)
   }, [])
@@ -336,15 +340,14 @@ export function Explorer({ data }: { data: Payload }) {
     const span = view === 'calendar' ? { from: `${month}-01`, to: shift(`${month}-01`, new Date(+month.slice(0, 4), +month.slice(5), 0).getDate() - 1) } : {}
     const r = search(data.events, query, today, { kind, platform, genre, ...span })
     let l = r.list
-    // just browsing: tournaments already under way are in the esports schedule, so the grid starts with what's next
+    // just browsing: tournaments under way are in the esports schedule
     if (view === 'grid' && kind === 'all' && !query.trim() && !onlySaved) l = l.filter((e) => e.kind === 'release' || e.start >= today)
     if (onlySaved) l = l.filter((e) => saved.has(e.id))
     if (view === 'grid' && sort !== 'date') l = [...l].sort((a, b) => (sort === 'hype' ? b.pop - a.pop : score(b) - score(a)))
     return { list: l, parsed: r.parsed }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.events, query, today, kind, platform, genre, sort, view, onlySaved, saved.ids, month])
 
-  const [groups, perMonth] = useMemo(() => { // the first `limit` results by month (one group when sorted otherwise), and every month's total
+  const [groups, perMonth] = useMemo(() => { // the first `limit` results by month (one group when sorted otherwise), and each month's total
     const m = new Map<string, Ev[]>(), count = new Map<string, number>()
     list.forEach((e, n) => {
       const k = e.start.slice(0, 7), key = sort === 'date' ? k : ''
@@ -362,15 +365,9 @@ export function Explorer({ data }: { data: Payload }) {
   // The calendar feed follows what is on screen, or the saved list
   const mine = onlySaved && saved.ids.length > 0
   const params = new URLSearchParams(Object.entries(mine ? { ids: saved.ids.slice(0, 300).join(',') } : { q: q.trim(), type: kind, platform, genre }).filter(([, v]) => v && v !== 'all')).toString()
-  const feed = origin ? `${origin}/api/calendar.ics${params ? `?${params}` : ''}` : '', done = !!copied && copied === feed
+  const feed = origin ? `${origin}/api/calendar.ics${params ? `?${params}` : ''}` : ''
   const describe = mine ? 'everything on your wishlist' : `upcoming ${platform !== 'all' ? `${platform} ` : ''}${KINDS[kind]}${genre !== 'all' ? ` in ${genre}` : ''}${q.trim() ? ` matching “${q.trim()}”` : ''}`
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(feed) } catch { prompt('Calendar feed link', feed) }
-    setCopied(feed)
-    setTimeout(() => setCopied(''), 2200)
-  }
-  const cards = (l: Ev[]) => <div className={GRID}>{l.map((e) => <Card key={e.id} e={e} today={today} row />)}</div>
-  const empty = 'rounded-panel border border-dashed border-line/12 px-6 text-center'
+  const cards = (l: Ev[]) => <div className={GRID}>{l.map((e) => <Card key={e.id} e={e} today={today} row lazy />)}</div>
 
   return (
     <Section id="explore" title="Search the calendar"
@@ -386,22 +383,15 @@ export function Explorer({ data }: { data: Payload }) {
 
       <SearchBox value={q} query={query} onChange={setQ} events={data.events} today={today} chips={parsed.chips} text={parsed.text} />
 
-      <div className="sticky top-[65px] z-30 -mx-4 mt-8 border-y lg:top-[76px] border-line/10 bg-black/85 px-4 py-2.5 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:mx-0 lg:rounded-full lg:border lg:px-2.5 lg:py-2">
-        <div className="flex items-center gap-3">
-          <div className="no-scrollbar -my-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1 [mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] xl:[mask-image:none]">
-            <Segment label="Show" value={kind} onChange={setKind} items={[['all', 'All'], ['release', 'Games'], ...(hasTournaments ? [['tournament', 'Esports'] as [Kind, ReactNode]] : [])]} />
-            <span aria-hidden className="mx-1 h-6 w-px shrink-0 bg-line/12" />
-            <div role="group" aria-label="Platform" className="flex shrink-0 gap-1.5">
-              {PLATFORMS.map((p) => <button key={p} type="button" onClick={() => setPlatform(platform === p ? 'all' : p)} aria-pressed={platform === p} className="pill">{p}</button>)}
-            </div>
-            <span aria-hidden className="mx-1 h-6 w-px shrink-0 bg-line/12" />
-            <Select label="Genre" value={genre} onChange={setGenre} options={[['all', 'All genres'], ...genres]} className="w-[150px]" />
-            <button type="button" onClick={() => setOnlySaved(!onlySaved)} aria-pressed={onlySaved} className="pill"><Heart on={onlySaved} className="h-4 w-4" />Wishlist{saved.ids.length ? <span className="opacity-70">{saved.ids.length}</span> : null}</button>
-          </div>
-          <Segment label="View" value={view} onChange={setView}
-            items={[['grid', <><Icon name="grid" /><span className="sr-only sm:not-sr-only">Grid</span></>], ['calendar', <><Icon name="calendar" /><span className="sr-only sm:not-sr-only">Month</span></>]]} />
-        </div>
-      </div>
+      <FilterBar end={<Segment label="View" value={view} onChange={setView}
+        items={[['grid', <><Icon name="grid" /><span className="sr-only sm:not-sr-only">Grid</span></>], ['calendar', <><Icon name="calendar" /><span className="sr-only sm:not-sr-only">Month</span></>]]} />}>
+        <Segment label="Show" value={kind} onChange={setKind} items={[['all', 'All'], ['release', 'Games'], ...(hasTournaments ? [['tournament', 'Esports'] as [Kind, ReactNode]] : [])]} />
+        <Sep />
+        <PlatformPills value={platform} onChange={(p) => setPlatform(p || 'all')} />
+        <Sep />
+        <Select label="Genre" value={genre} onChange={setGenre} options={[['all', 'All genres'], ...genres]} className="w-[150px]" />
+        <button type="button" onClick={() => setOnlySaved(!onlySaved)} aria-pressed={onlySaved} className="pill"><Heart on={onlySaved} className="h-4 w-4" />Wishlist{saved.ids.length ? <span className="opacity-70">{saved.ids.length}</span> : null}</button>
+      </FilterBar>
 
       <div className="mt-6 mb-8 flex flex-wrap items-center gap-x-5 gap-y-3">
         <p aria-live="polite" className="text-[15px] text-muted"><span className="font-semibold text-fg">{list.length.toLocaleString('en-US')}</span> {list.length === 1 ? 'result' : 'results'}{view === 'calendar' ? ` in ${monthLabel(month)}` : ''}</p>
@@ -443,20 +433,9 @@ export function Explorer({ data }: { data: Payload }) {
         </>
       )}
 
-      <div className="mt-16 grid grid-cols-1 gap-6 rounded-panel bg-panel p-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:p-8">
-        <div className="flex gap-4">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-mark text-black"><Icon name="calendar" className="h-6 w-6" /></span>
-          <div>
-            <h3 className="text-lg font-semibold">Add {mine ? 'your wishlist' : 'this view'} to your calendar</h3>
-            <p className="mt-1 max-w-xl text-[15px] text-muted">A live feed of {describe}. When a date moves, your calendar follows.</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <a href={feed ? `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal(feed))}` : undefined} target="_blank" rel="noopener noreferrer" className="btn btn-mark">Google Calendar</a>
-          <a href={feed ? webcal(feed) : undefined} className="btn btn-line">Apple or Outlook</a>
-          <button type="button" onClick={copy} disabled={!feed} className="btn btn-line"><Icon name={done ? 'check' : 'copy'} />{done ? 'Link copied' : 'Copy link'}</button>
-        </div>
-      </div>
+      <FeedPanel feed={feed} title={<>Add {mine ? 'your wishlist' : 'this view'} to your calendar</>} className="mt-16">
+        <p className="mt-1 max-w-xl text-[15px] text-muted">A live feed of {describe}. When a date moves, your calendar follows.</p>
+      </FeedPanel>
     </Section>
   )
 }
@@ -466,37 +445,21 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
   const router = useRouter()
   const [focus, setFocus] = useState(false), [active, setActive] = useState(-1)
   const wrap = useRef<HTMLDivElement>(null), field = useRef<HTMLInputElement>(null), blurred = useRef<ReturnType<typeof setTimeout>>(undefined)
-  // Suggestions are open while the box has the focus. A press anywhere else lets go of it, which closes them: a phone does not move the focus
-  // when you tap a part of the page that does nothing, so the box is told to let go.
-  useEffect(() => {
-    if (!focus) return
-    const away = (e: Event) => { if (!wrap.current?.contains(e.target as Node)) field.current?.blur() }
-    document.addEventListener('pointerdown', away)
-    return () => document.removeEventListener('pointerdown', away)
-  }, [focus])
+  // suggestions show while the box has focus; a press elsewhere lets go of it (phones keep focus on taps that do nothing)
+  useOutside(wrap, focus, () => field.current?.blur())
   useEffect(() => () => clearTimeout(blurred.current), [])
-  // Suggestions only when part of the query names a game: a pure filter ("ps5 next month") is answered by the grid, and its chips stay in view
+  // suggestions only when the query names a game: a pure filter ("ps5 next month") is answered by the grid
   const local = useMemo(() => (text.trim() ? search(events, query, today, { from: '0000-01-01', to: '9999-12-31' }).list.sort((a, b) => b.pop - a.pop).slice(0, 6) : []), [events, query, today, text])
-  // The calendar only holds what is out recently or coming, so titles it lacks (older and long-running games) are looked up by name
-  const [found, setFound] = useState<Ev[]>([])
-  useEffect(() => {
-    const q = text.trim()
-    if (q.length < 3 || local.length >= 6) return setFound([])
-    const ctl = new AbortController()
-    const t = setTimeout(() => {
-      fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: ctl.signal }).then((r) => r.json()).then((j: { data?: { slug: string; title: string; released?: string; thumb: string }[] }) => {
-        setFound((j.data ?? []).map((g): Ev => ({ id: `lookup-${g.slug}`, slug: g.slug, title: g.title, kind: 'release', start: g.released ?? '', thumb: g.thumb, shots: [], platforms: [], genres: [], pop: 0 })))
-      }).catch(() => {})
-    }, 250)
-    return () => { clearTimeout(t); ctl.abort() }
-  }, [text, local.length])
+  // titles the calendar lacks (older games) are looked up by name
+  const term = text.trim(), { found } = useLookup(term.length >= 3 && local.length < 6 ? term : '')
   const hits = useMemo(() => {
     const seen = new Set(local.map((e) => e.slug))
-    return [...local, ...found.filter((e) => !seen.has(e.slug))].slice(0, 8)
+    const more = (found ?? []).filter((g) => !seen.has(g.slug)).map((g): Ev => ({ id: `lookup-${g.slug}`, slug: g.slug, title: g.title, kind: 'release', start: g.released ?? '', thumb: g.thumb, shots: [], platforms: [], genres: [], pop: 0 }))
+    return [...local, ...more].slice(0, 8)
   }, [local, found])
   useEffect(() => setActive(-1), [value])
   const open = (e: Ev) => (e.slug ? router.push(href(e)) : e.url && window.open(e.url, '_blank', 'noopener'))
-  const name = text.trim().slice(0, 60), rows = hits.length + (name.length >= 2 ? 1 : 0) // the last row, when there is a name to look for, goes on to Browse: every game, not only these few
+  const name = term.slice(0, 60), rows = hits.length + (name.length >= 2 ? 1 : 0) // a last row goes on to Browse
   const browseAll = () => router.push(browseHref({ q: name }))
   const onKey = (ev: KeyboardEvent<HTMLInputElement>) => {
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); setActive((a) => Math.max(-1, Math.min(rows - 1, a + (ev.key === 'ArrowDown' ? 1 : -1)))) }
@@ -504,6 +467,7 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
     else if (ev.key === 'Escape') { if (value) onChange(''); else ev.currentTarget.blur() }
   }
   const expanded = focus && hits.length > 0
+  const option = (n: number) => ({ role: 'option', 'aria-selected': n === active, onMouseEnter: () => setActive(n) })
 
   return (
     <div className="max-w-3xl">
@@ -519,7 +483,7 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
         {expanded && (
           <ul id="search-results" role="listbox" aria-label="Suggestions" className="absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-[20px] bg-panel p-1.5 shadow-[0_24px_60px_-20px_rgb(0_0_0/0.9)] ring-1 ring-line/12 ring-inset">
             {hits.map((e, n) => (
-              <li key={e.id} id={`hit-${e.id}`} role="option" aria-selected={n === active} onMouseDown={(ev) => { ev.preventDefault(); open(e) }} onMouseEnter={() => setActive(n)}
+              <li key={e.id} id={`hit-${e.id}`} {...option(n)} onMouseDown={(ev) => { ev.preventDefault(); open(e) }}
                 className={`flex cursor-pointer items-center gap-3 rounded-[14px] px-2.5 py-2 ${n === active ? 'bg-raised' : ''}`}>
                 <Thumb e={e} className="h-10 w-16 rounded-[6px]" />
                 <span className="min-w-0 flex-1">
@@ -530,7 +494,7 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
               </li>
             ))}
             {rows > hits.length && (
-              <li id="hit-browse" role="option" aria-selected={active === hits.length} onMouseDown={(ev) => { ev.preventDefault(); browseAll() }} onMouseEnter={() => setActive(hits.length)}
+              <li id="hit-browse" {...option(hits.length)} onMouseDown={(ev) => { ev.preventDefault(); browseAll() }}
                 className={`flex cursor-pointer items-center gap-3 rounded-[14px] px-2.5 py-2.5 ${active === hits.length ? 'bg-raised' : ''}`}>
                 <span className="grid h-10 w-16 shrink-0 place-items-center rounded-[6px] bg-raised text-muted"><Icon name="search" className="h-4 w-4" /></span>
                 <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">Search every game for “{name.slice(0, 30)}”</span>

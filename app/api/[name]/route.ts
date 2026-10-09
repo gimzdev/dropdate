@@ -4,24 +4,26 @@ import { search } from '@/lib/search'
 import { getEvents, getGame, searchGames } from '@/lib/data'
 import { allow, clientIp } from '@/lib/limit'
 
-// The public API: /api/events, /api/tournaments, /api/games, /api/search and /api/calendar.ics
+// The public API: /api/events, /api/tournaments, /api/games, /api/search and /api/calendar.ics, plus /api/shots for the home page's cards
 export const dynamic = 'force-dynamic'
 
-const json = (body: unknown, cache = 'public, s-maxage=3600', status = 200) => NextResponse.json(body, { status, headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': cache } })
+const CORS = { 'Access-Control-Allow-Origin': '*' }
+const json = (body: unknown, cache = 'public, s-maxage=3600', status = 200) => NextResponse.json(body, { status, headers: { ...CORS, 'Cache-Control': cache } })
+const error = (status: number, message: string) => NextResponse.json({ error: message }, { status })
 /** Lookups by name or slug go to RAWG, whose request allowance is shared by every visitor: one network may make this many a minute. */
-const tooMany = () => NextResponse.json({ error: 'Too many requests. Try again in a minute.' }, { status: 429, headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store', 'Retry-After': '60' } })
+const tooMany = () => NextResponse.json({ error: 'Too many requests. Try again in a minute.' }, { status: 429, headers: { ...CORS, 'Cache-Control': 'no-store', 'Retry-After': '60' } })
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ name: string }> }) {
   const sp = req.nextUrl.searchParams, name = (await params).name
   if (name === 'games') {
     const slug = sp.get('slug')
-    if (!slug) return NextResponse.json({ error: 'slug is required' }, { status: 400 })
+    if (!slug) return error(400, 'slug is required')
     if (!(await allow(`game:${clientIp(req)}`, 30, 60))) return tooMany()
     try {
       const game = await getGame(slug)
-      return game ? json({ data: game }) : NextResponse.json({ error: 'not found' }, { status: 404 })
+      return game ? json({ data: game }) : error(404, 'not found')
     } catch {
-      return NextResponse.json({ error: 'upstream unavailable' }, { status: 502 })
+      return error(502, 'upstream unavailable')
     }
   }
   // Title search across every game RAWG knows (the calendar itself only holds what is released or coming soon)
@@ -29,9 +31,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ name
     if (!(await allow(`search:${clientIp(req)}`, 40, 60))) return tooMany()
     return json({ data: await searchGames(sp.get('q') ?? '').catch(() => []) })
   }
-  if (name !== 'events' && name !== 'tournaments' && name !== 'calendar.ics') return NextResponse.json({ error: 'not found' }, { status: 404 })
+  if (name !== 'events' && name !== 'tournaments' && name !== 'calendar.ics' && name !== 'shots') return error(404, 'not found')
 
   const data = await getEvents(), type = name === 'tournaments' ? 'tournament' : sp.get('type')
+  // Every calendar game's screenshots by id: the home page leaves them out and its cards fetch them once, on the first hover
+  if (name === 'shots') return json(Object.fromEntries(data.events.flatMap((e) => (e.shots.length ? [[e.id, e.shots]] : []))), 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400')
   const find = () => search(data.events, sp.get('q') ?? '', data.today, {
     kind: type === 'release' || type === 'tournament' ? type : 'all',
     platform: PLATFORMS.find((p) => p.toLowerCase() === sp.get('platform')?.toLowerCase()),

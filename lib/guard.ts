@@ -1,5 +1,4 @@
-// What every account endpoint checks before it does anything: accounts are on, the request comes from this site,
-// the person is signed in, and they are not going faster than a person can. Server side only.
+// What every account endpoint checks first: accounts are on, the request is from this site, someone is signed in, at a human pace.
 import 'server-only'
 import { NextResponse } from 'next/server'
 import { type Me, baseUrl, me } from './auth'
@@ -11,13 +10,14 @@ export const NO_STORE = { 'Cache-Control': 'private, no-store' }
 /** An error answer: a sentence a person can read, and optionally a code the page can act on. */
 export const fail = (status: number, error: string, headers?: Record<string, string>, code?: string) => NextResponse.json({ error, ...(code && { code }) }, { status, headers: { ...NO_STORE, ...headers } })
 
-/** A request that changes something must come from this site and carry JSON: a form on another site can send neither. Null when it does. */
+/** A change must come from this site as JSON (a form elsewhere can send neither). Null when it does. */
 export const refuseForeign = (req: Request) => (!sameOrigin(req, baseUrl()) || !req.headers.get('content-type')?.includes('application/json') ? fail(403, 'This request was refused.') : null)
 
 /** The signed-in person, or the response to send instead. `write` also demands a request from this site, as JSON. */
 export async function guard(req: Request, o: { write?: boolean; rate?: [name: string, max: number, windowSec: number] } = {}): Promise<Me | NextResponse> {
   if (!hasDb()) return fail(404, 'Accounts are not turned on.')
-  if (o.write) { const refused = refuseForeign(req); if (refused) return refused }
+  const refused = o.write && refuseForeign(req)
+  if (refused) return refused
   let user: Me | null
   try { user = await me(req.headers) } catch (e) {
     console.error('[dropdate] could not check the session:', e instanceof Error ? e.message : e)

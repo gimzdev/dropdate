@@ -2,29 +2,36 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { type RefObject, useEffect, useRef, useState } from 'react'
 import { dismiss, ready, setList, signOut, signedInNow, useAccount, useNotice } from '@/lib/account'
 import { Icon } from './icons'
 
 // What the browser shows of an account: the header control, the Played and Completed buttons of a game, and the short messages.
 
+/** While `on`, a press (and with `focus`, the keyboard landing) anywhere outside `box` calls `away`. */
+export function useOutside(box: RefObject<HTMLElement | null>, on: boolean, away: () => void, focus = false) {
+  useEffect(() => {
+    if (!on) return
+    const f = (e: Event) => { if (!box.current?.contains(e.target as Node)) away() }
+    document.addEventListener('pointerdown', f)
+    if (focus) document.addEventListener('focusin', f)
+    return () => { document.removeEventListener('pointerdown', f); document.removeEventListener('focusin', f) }
+  }, [on])
+}
+
 const signInHref = (path: string) => (path.startsWith('/signin') ? '/signin' : `/signin?next=${encodeURIComponent(path)}`)
 
-/**
- * Sign in, or the account menu. Before the browser knows who is there, both a "Sign in" link and a placeholder are in the page and
- * the stylesheet shows the right one (the page head marks signed-in browsers before the first paint), so nothing flashes or moves.
- */
+/** Sign in, or the account menu. Until the browser knows, both are in the page and the CSS shows the right one (no flash). */
 export function AccountMenu({ className }: { className: string }) {
   const account = useAccount(), path = usePathname()
   const [open, setOpen] = useState(false), box = useRef<HTMLDivElement>(null)
   useEffect(() => setOpen(false), [path])
+  useOutside(box, open, () => setOpen(false))
   useEffect(() => {
     if (!open) return
-    const away = (e: Event) => { if (!box.current?.contains(e.target as Node)) setOpen(false) }
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); box.current?.querySelector('button')?.focus() } }
-    document.addEventListener('pointerdown', away)
     document.addEventListener('keydown', key)
-    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', key) }
+    return () => document.removeEventListener('keydown', key)
   }, [open])
 
   const slim = `${className} w-9 px-0 sm:w-auto sm:px-4`
@@ -57,11 +64,7 @@ export function AccountMenu({ className }: { className: string }) {
   )
 }
 
-/**
- * Marks a game as played, and as completed once it is, or undoes either. Completed is a mark on a played game, so the two sit together:
- * Completed on its own marks both, and un-marking Played clears both. They live on the game page, not on cards, which stay light.
- * Signed out, they send you to sign in and bring you back here.
- */
+/** Played and Completed on a game page (completing marks both; un-playing clears both). Signed out, they go to sign in and back. */
 export function Progress({ id, title }: { id: string; title: string }) {
   const account = useAccount(), router = useRouter(), path = usePathname()
   const played = account.played.includes(id), done = account.completed.includes(id), settled = account.phase === 'out' || account.phase === 'in'
@@ -85,7 +88,7 @@ export function Progress({ id, title }: { id: string; title: string }) {
   )
 }
 
-/** A short message at the bottom of the screen. The region is always in the page so screen readers announce what appears in it. */
+/** A short message at the bottom of the screen; the region stays in the page so screen readers announce it. */
 export function Notice() {
   const message = useNotice()
   return (

@@ -9,7 +9,7 @@ import { canEmail, sendCode } from '@/lib/mail'
 export const dynamic = 'force-dynamic'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-/** Emails sent for sign-in codes, all addresses together, in an hour: nobody can run up the email bill or spoil the sending domain's reputation. */
+/** Sign-in emails for all addresses together in an hour: nobody can run up the bill or spoil the sending domain's reputation. */
 const ALL_PER_HOUR = 100
 
 export async function POST(req: Request) {
@@ -20,9 +20,9 @@ export async function POST(req: Request) {
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   if (email.length > 254 || !EMAIL.test(email)) return fail(400, 'That email address does not look right.', undefined, 'INVALID_EMAIL')
   try {
-    // A code that was just sent is still on its way (and still works): asking again would only replace it, and let anyone cancel someone else's code
+    // A code just sent still works: asking again would only replace it, and let anyone cancel someone else's code
     if (await codeIsFresh(email)) return fail(429, 'A code was sent to this address a moment ago. Use it, or wait a minute for a new one.', { 'Retry-After': String(CODE_GAP) }, 'CODE_FRESH')
-    // Nobody can flood an inbox: a handful per network, five an hour per mailbox (plus-tags and Gmail dots count as the same one), however many networks ask
+    // Nobody can flood an inbox: a handful per network, five an hour per mailbox (+tags and Gmail dots count as one), however many networks ask
     const network = await hit(`code-net:${clientIp(req)}`, 12, 600)
     if (!network.allowed) return fail(429, 'Too many tries from this network. Wait a few minutes and try again.', { 'Retry-After': String(network.retryAfter) })
     const mine = await hit(`otp:${mailbox(email)}`, 5, 3600)

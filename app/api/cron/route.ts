@@ -4,7 +4,7 @@ import { hasDb } from '@/lib/db'
 import { NO_STORE, fail } from '@/lib/guard'
 import { prune } from '@/lib/library'
 
-// The daily clean-up, called by Vercel Cron (see vercel.json) with the CRON_SECRET it sends as a bearer token
+// The daily clean-up, called by Vercel Cron (vercel.json) with CRON_SECRET as a bearer token
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   if (given.length !== want.length || !timingSafeEqual(given, want)) return fail(401, 'Not allowed.')
   try {
     const done = await prune()
-    return NextResponse.json(done, { status: done.failed ? 500 : 200, headers: NO_STORE }) // a step that failed shows as a failed run in Vercel's cron logs
+    return NextResponse.json(done, { status: done.failed ? 500 : 200, headers: NO_STORE }) // a failed step shows as a failed run in Vercel's cron logs
   } catch (e) {
     console.error('[dropdate] the daily clean-up failed:', e instanceof Error ? e.message : e)
     return fail(500, 'The clean-up failed. See the logs.')

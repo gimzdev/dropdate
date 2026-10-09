@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Explorer, Fresh, Hero, Schedule, Upcoming, WeekStrip } from '@/components/home'
 import { ApiSection, Footer } from '@/components/site'
 import { Header } from '@/components/ui'
-import { type Ev, gap, lite, shift } from '@/lib/core'
+import { type Ev, gap, shift } from '@/lib/core'
 import { getEvents } from '@/lib/data'
 
 export const revalidate = 3600 // rebuilt in the background at most once an hour, from live data: nothing to maintain
@@ -14,8 +14,11 @@ export default async function Home() {
   const data = await getEvents()
   // In production an outage keeps the last good page online (it is rebuilt on the next visit); builds and dev show the banner
   if (data.error && process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE !== 'phase-production-build') throw new Error(data.error)
-  // One light copy of every event, shared by all the sections: an event that appears twice is sent to the browser once
-  const { today } = data, events = data.events.map(lite), big = new Map(data.events.map((e) => [e.id, e]))
+  // One light copy of every event, shared by all the sections: an event that appears twice is sent to the browser once. Large artwork stays
+  // here unless the hero needs it, and screenshots (most of the weight) come later, on the first hover of a card (/api/shots)
+  const { today } = data, events = data.events.map(({ image: _, shots: __, ...e }): Ev => ({ ...e, shots: [] }))
+  const big = new Map(data.events.map((e) => [e.id, e.image]))
+  const art = (e: Ev) => { const image = big.get(e.id); return image ? { ...e, image } : e } // the hero and the first tile keep their large artwork
   const releases = events.filter((e) => e.kind === 'release'), ahead = releases.filter((e) => e.start >= today)
   const soon = ahead.filter((e) => gap(today, e.start) <= 120)
 
@@ -26,7 +29,6 @@ export default async function Home() {
   const [lead, ...anticipated] = [...(year.length >= 6 ? year : later)].sort(hype).slice(0, 11)
   const fresh = releases.filter((e) => e.start < today && gap(e.start, today) <= 30).sort(hype).slice(0, 10)
   const cups = events.filter((e) => e.kind === 'tournament' && (e.end ?? e.start) >= today).sort(hype).slice(0, 10).sort((a, b) => a.start.localeCompare(b.start))
-  const art = (e: Ev) => big.get(e.id) ?? e // the hero and the first tile keep their large artwork
 
   return (
     <>

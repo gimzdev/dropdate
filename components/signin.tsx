@@ -5,18 +5,15 @@ import { useRouter } from 'next/navigation'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { AuthError, confirmCode, requestCode, setSession, startProvider } from '@/lib/account'
 
-// Sign in with a six-digit code sent by email, or with Google or Discord when the site has them. Same steps for new and returning people:
-// the first code creates the account.
+// Sign in with a six-digit code by email, or Google or Discord when the site has them. The first code creates the account.
 
 export interface Methods { email: boolean; google: boolean; discord: boolean }
+type Provider = 'google' | 'discord'
 
 /** Seconds before a new code can be asked for: the server holds the same line (CODE_GAP in lib/auth.ts). */
 const WAIT = 45
 
-/**
- * Someone who is already signed in landed here (a bookmark, the Back button, or a browser that forgot the "signed in" marker):
- * note it for the header, and carry on to where they were going.
- */
+/** Already signed in (a bookmark, Back, a forgotten marker): note it and carry on. */
 export function Resume({ next }: { next: string }) {
   const router = useRouter()
   useEffect(() => { setSession(true); router.replace(next) }, [next, router])
@@ -27,21 +24,18 @@ export function Resume({ next }: { next: string }) {
     </div>
   )
 }
-type Provider = 'google' | 'discord'
 
 const field = 'h-12 w-full rounded-xl bg-black px-4 text-[17px] ring-1 ring-line/15 ring-inset transition placeholder:text-dim'
 const link = 'underline decoration-line/30 underline-offset-4 transition hover:text-fg hover:decoration-mark'
+const ERRORS: Record<string, string> = {
+  NETWORK: 'No connection. Check your internet and try again.', INVALID_OTP: 'That code is not right. Check it and try again.',
+  OTP_EXPIRED: 'That code has expired. Ask for a new one.', TOO_MANY_ATTEMPTS: 'Too many wrong tries. Ask for a new code.', INVALID_EMAIL: 'That email address does not look right.',
+}
 
 /** What went wrong, in words for a person. */
 function describe(e: unknown, sending: boolean) {
   if (!(e instanceof AuthError)) return 'Something went wrong. Try again.'
-  switch (e.code) {
-    case 'NETWORK': return 'No connection. Check your internet and try again.'
-    case 'INVALID_OTP': return 'That code is not right. Check it and try again.'
-    case 'OTP_EXPIRED': return 'That code has expired. Ask for a new one.'
-    case 'TOO_MANY_ATTEMPTS': return 'Too many wrong tries. Ask for a new code.'
-    case 'INVALID_EMAIL': return 'That email address does not look right.'
-  }
+  if (ERRORS[e.code]) return ERRORS[e.code]
   if (e.status === 429) return sending && e.message ? e.message : 'Too many tries. Wait a minute and try again.'
   if (e.status >= 500 && e.message) return e.message
   return 'Something went wrong. Try again.'
@@ -54,6 +48,7 @@ export function SignIn({ next, methods, dev, failed }: { next: string; methods: 
   const [error, setError] = useState(failed ? 'That sign-in did not go through. Try again, or use an email code.' : '')
   const codeBox = useRef<HTMLInputElement>(null)
   const providers = (['google', 'discord'] as const).filter((p) => methods[p])
+  const say = (err: string, note = '') => { setError(err); setInfo(note) }
 
   useEffect(() => { if (step === 'code') codeBox.current?.focus() }, [step])
   useEffect(() => { // the seconds until a new code may be asked for
@@ -70,23 +65,21 @@ export function SignIn({ next, methods, dev, failed }: { next: string; methods: 
   async function send(again: boolean) {
     const to = email.trim().toLowerCase()
     if (!to || busy) return
-    setBusy('email'); setError(''); setInfo('')
+    setBusy('email'); say('')
+    const toCode = (note: string) => { setEmail(to); setStep('code'); setCode(''); setWait(WAIT); setInfo(note) }
     try {
       await requestCode(to)
-      setEmail(to); setStep('code'); setCode(''); setWait(WAIT)
-      if (again) setInfo('A new code is on its way.')
+      toCode(again ? 'A new code is on its way.' : '')
     } catch (e) {
-      if (e instanceof AuthError && e.code === 'CODE_FRESH') { // a code for this address went out a moment ago and still works
-        setEmail(to); setStep('code'); setCode(''); setWait(WAIT)
-        setInfo('A code was just sent to this address. Enter it, or wait a moment to ask for a new one.')
-      } else setError(describe(e, true))
+      if (e instanceof AuthError && e.code === 'CODE_FRESH') toCode('A code was just sent to this address. Enter it, or wait a moment to ask for a new one.') // it went out a moment ago and still works
+      else setError(describe(e, true))
     }
     setBusy('')
   }
 
   async function verify(value: string) {
     if (busy || value.length !== 6) return
-    setBusy('code'); setError(''); setInfo('')
+    setBusy('code'); say('')
     try {
       await confirmCode(email, value)
       router.replace(next) // stays busy: the page changes
@@ -98,7 +91,7 @@ export function SignIn({ next, methods, dev, failed }: { next: string; methods: 
 
   async function provider(name: Provider) {
     if (busy) return
-    setBusy(name); setError(''); setInfo('')
+    setBusy(name); say('')
     try { await startProvider(name, next) } catch (e) { setError(describe(e, false)); setBusy('') }
   }
 
@@ -155,7 +148,7 @@ export function SignIn({ next, methods, dev, failed }: { next: string; methods: 
             </form>
             {feedback}
             <div className="mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 text-[15px] text-muted">
-              <button type="button" onClick={() => { setStep('email'); setError(''); setInfo('') }} className={link}>Use another email</button>
+              <button type="button" onClick={() => { setStep('email'); say('') }} className={link}>Use another email</button>
               <button type="button" onClick={() => void send(true)} disabled={wait > 0 || !!busy} className={`${link} disabled:pointer-events-none disabled:no-underline disabled:opacity-60`}>{wait > 0 ? `Send a new code in ${wait}s` : 'Send a new code'}</button>
             </div>
             <p className="mt-5 text-[13px] text-dim">Nothing yet? Look in the spam folder too.</p>

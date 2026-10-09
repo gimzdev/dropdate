@@ -9,8 +9,7 @@ import { BROWSE_PAGE, BROWSE_PAGES, type BrowseQuery, browseHref, iso, lite, par
 import { type BrowseError, browseGames, getEvents } from '@/lib/data'
 import { allow, clientIp } from '@/lib/limit'
 
-// Every game RAWG knows, not only what is out lately or coming: a year, a platform, a genre, a name, sorted by popularity, score or date.
-// The list is made here for the address in the bar, so a page of results can be shared, and the controls only change that address.
+// Every game RAWG knows, by year, platform, genre or name, sorted by popularity, score or date. Made here for the address in the bar.
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> }
 
@@ -23,7 +22,7 @@ const PROBLEMS = {
 } as const
 const link = 'font-semibold underline decoration-line/30 underline-offset-4 transition hover:decoration-mark'
 
-/** The games for an address (as JSON of the query) or the reason there are none; made once per request, which the page and its metadata both ask for. */
+/** The games for a query (as JSON) or why there are none, once per request (the page and its metadata both ask). */
 const look = cache(async (key: string) => {
   const query = JSON.parse(key) as BrowseQuery
   let found: Awaited<ReturnType<typeof browseGames>> | undefined, problem: keyof typeof PROBLEMS | undefined
@@ -35,7 +34,7 @@ const queryOf = async (searchParams: Props['searchParams']) => parseBrowse(await
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const { problem } = await look(JSON.stringify(await queryOf(searchParams)))
-  const narrowed = Object.keys(await searchParams).length > 0 || !!problem // the plain page is for search engines; its thousands of variations, and a page that could not load, are not
+  const narrowed = Object.keys(await searchParams).length > 0 || !!problem // only the plain page is for search engines
   return {
     title: 'Browse every game',
     description: 'Half a million games, from the first arcade cabinets to what comes out next year: browse by year, platform and genre, or search by name.',
@@ -47,7 +46,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 export default async function Browse({ searchParams }: Props) {
   const today = iso(new Date()), thisYear = +today.slice(0, 4), query = await queryOf(searchParams)
   const { found, problem } = await look(JSON.stringify(query))
-  const calendar = new Map(((await getEvents()).events).map((e) => [e.id, lite(e)])) // a game the calendar holds is shown as the calendar has it
+  const calendar = new Map(((await getEvents()).events).map((e) => [e.id, lite(e)])) // a calendar game shows as the calendar has it
   const items = found?.items ?? [], count = found?.count ?? 0, pages = found?.pages ?? 0
   const filtered = !!(query.q || query.year || query.platform || query.genre || query.sort !== 'popular')
 
@@ -70,7 +69,7 @@ export default async function Browse({ searchParams }: Props) {
           ) : (
             <>
               <p aria-live="polite" className="mt-6 mb-8 flex min-h-5 flex-wrap items-baseline gap-x-5 gap-y-1.5 text-[15px] text-muted">
-                {items.length > 0 && ( // (RAWG counts games without a date or artwork too; a page of those has no cards to count)
+                {items.length > 0 && ( // (RAWG also counts games without a date or artwork)
                   <>
                     <span><span className="font-semibold text-fg">{count.toLocaleString('en-US')}</span> {count === 1 ? 'game' : 'games'}</span>
                     {pages === BROWSE_PAGES && <span>The first {(BROWSE_PAGE * BROWSE_PAGES).toLocaleString('en-US')} are in these pages: a year, a platform or a genre narrows the rest down.</span>}

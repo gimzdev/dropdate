@@ -4,11 +4,10 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { deleteAccount, drop, notify, seed, setList, signOut, useAccount } from '@/lib/account'
-import { type Ev, type LibItem, TABS, type TabName, monthYear, status, webcal } from '@/lib/core'
-import { Heart, Icon } from './icons'
-import { DateBlock, Img, Open, Score, TONE, Thumb, useToday } from './ui'
+import { type Ev, type Found, type LibItem, TABS, type TabName, monthYear, status } from '@/lib/core'
+import { DateBlock, FeedPanel, Heart, Icon, Img, Open, Score, TONE, Thumb, useLookup, useOutside, useToday } from './ui'
 
-// The profile: the wishlist and the games you have played as a grid of cards (artwork, score, title, date), a tick on a played game to say you completed it, and at the bottom sign out, download and delete.
+// The profile: the wishlist and the games you played as cards (a played game can be marked completed); sign out, download, delete.
 
 const PAGE = 60
 const corner = 'grid h-10 w-10 place-items-center rounded-full bg-black/55 text-white/90 ring-1 ring-white/15 backdrop-blur-md transition ring-inset hover:bg-black/75 hover:text-white'
@@ -21,12 +20,12 @@ function wishlistOrder(list: Ev[], today: string) {
   return [...list].sort((a, b) => rank(a) - rank(b) || (rank(a) === 2 ? b.start.localeCompare(a.start) : (a.start || '9').localeCompare(b.start || '9') || a.title.localeCompare(b.title)))
 }
 
-/** A game as a card: its artwork with the score on it and the buttons in the corner, then the date (wishlist), the title and where it is out. */
+/** A game as a card: artwork, score and corner buttons, then the date (wishlist), title and platforms. */
 function Tile({ e, list, today, done }: { e: Ev; list: TabName; today: string; done: boolean }) {
   const esport = e.kind === 'tournament', out = !esport && !!e.start && e.start <= today, played = list === 'played'
   const s = e.start ? status(e, today) : null
   const when = !e.start ? 'No date yet' : e.tba && e.start > today ? 'Date to be announced' : s!.label
-  const meta = (played ? [e.start ? e.start.slice(0, 4) : '', platforms(e)] : [platforms(e) || e.genres[0]]).filter(Boolean) // separate items: a narrow card wraps between them, never in the middle of one
+  const meta = (played ? [e.start ? e.start.slice(0, 4) : '', platforms(e)] : [platforms(e) || e.genres[0]]).filter(Boolean) // separate items: narrow cards wrap between them
   const remove = played ? 'Remove from the games you have played' : 'Remove from your wishlist'
   return (
     <li className="group relative">
@@ -68,37 +67,12 @@ const ADD: Record<TabName, { label: string; placeholder: string; button: string 
   played: { label: 'Search for a game you have played', placeholder: 'Search a game you played', button: 'Played' },
 }
 
-interface Found { key: string; slug: string; title: string; released?: string; thumb: string; metacritic?: number }
-
-/**
- * Search every game and put one on a list: the way to add what the calendar does not hold (older games, mostly). The answers drop down
- * over the page under the box, so closing them moves nothing: a press or a Tab anywhere outside the box shuts them, and the box opens them again.
- */
+/** Search every game and put one on a list (mostly older games the calendar lacks). Answers drop down over the page; leaving the box shuts them. */
 function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; has: (key: string) => boolean; onAdded: (e: Ev) => void }) {
-  const [q, setQ] = useState(''), [found, setFound] = useState<Found[] | null>(null), [failed, setFailed] = useState(false), [adding, setAdding] = useState(''), [open, setOpen] = useState(false)
+  const [q, setQ] = useState(''), [adding, setAdding] = useState(''), [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null), field = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    const term = q.trim()
-    setFailed(false)
-    if (term.length < 2) return setFound(null)
-    const ctl = new AbortController()
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`, { signal: ctl.signal })
-        if (!res.ok) { drop(res); throw new Error(String(res.status)) }
-        setFound(((await res.json()) as { data: Found[] }).data.slice(0, 8))
-      } catch { if (!ctl.signal.aborted) { setFound(null); setFailed(true) } }
-    }, 250)
-    return () => { clearTimeout(t); ctl.abort() }
-  }, [q])
-  // While the answers are down, a press or the keyboard landing anywhere outside the box closes them (focusin, not blur: a click on a result must not close it first)
-  useEffect(() => {
-    if (!open) return
-    const away = (e: Event) => { if (!box.current?.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('pointerdown', away)
-    document.addEventListener('focusin', away)
-    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('focusin', away) }
-  }, [open])
+  const term = q.trim(), { found: all, failed } = useLookup(term.length >= 2 ? term : ''), found = all?.slice(0, 8) ?? null
+  useOutside(box, open, () => setOpen(false), true) // focusin, not blur: a click on a result must not close it first
   const shown = open && (failed || found !== null)
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Escape') return
@@ -114,7 +88,6 @@ function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; 
     if (saved?.ev) onAdded(saved.ev) // and takes the server's copy of the details when it arrives
     setAdding('')
   }
-  const term = q.trim()
   return (
     <div ref={box} onKeyDown={onKey} className="mt-8">
       <label htmlFor="add-game" className="sr-only">{ADD[list].label}</label>
@@ -190,14 +163,19 @@ function DeleteAccount() {
   )
 }
 
+const EMPTY = {
+  wishlist: ['Your wishlist is empty', 'Tap the heart on any game or tournament to keep it here, or search for a game above.'],
+  played: ['No games marked as played yet', 'Open a game and press “Played”, or search for the ones you have played above.'],
+}
+
 export function Profile({ user, items, today: serverToday }: { user: { email: string; since: string }; items: LibItem[]; today: string }) {
   const router = useRouter(), params = useSearchParams(), today = useToday(serverToday), account = useAccount()
   const wanted: TabName = TABS.find((l) => l === params.get('tab')) ?? 'wishlist'
-  const [tab, setTab] = useState<TabName>(wanted), [limit, setLimit] = useState(PAGE), [added, setAdded] = useState<Ev[]>([]), [origin, setOrigin] = useState(''), [copied, setCopied] = useState(false)
+  const [tab, setTab] = useState<TabName>(wanted), [limit, setLimit] = useState(PAGE), [added, setAdded] = useState<Ev[]>([]), [origin, setOrigin] = useState('')
   useEffect(() => setTab(wanted), [wanted])
   useEffect(() => setOrigin(location.origin), [])
 
-  // What the server rendered, newest first; the account store takes over once it has this (seed), and then follows every change on the page
+  // what the server rendered, newest first; the account store takes over from there (seed)
   const first = useMemo(() => {
     const keys = (f: 'wishlisted' | 'played' | 'completed') => items.filter((i) => i[f]).sort((a, b) => b[f]!.localeCompare(a[f]!)).map((i) => i.ev.id)
     return { wishlist: keys('wishlisted'), played: keys('played'), completed: keys('completed') }
@@ -207,7 +185,7 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
   const keys = account.phase === 'in' ? account : first
   const known = useMemo(() => new Map([...items.map((i) => i.ev), ...added].map((e) => [e.id, e])), [items, added])
   const missing = keys[tab].some((k) => !known.has(k)), asked = useRef(false)
-  useEffect(() => { if (missing && !asked.current) { asked.current = true; router.refresh() } }, [missing, router]) // something was added elsewhere (a merged list): ask the server for the details
+  useEffect(() => { if (missing && !asked.current) { asked.current = true; router.refresh() } }, [missing, router]) // added elsewhere (a merge): get the details
 
   const rows = useMemo(() => {
     const list = keys[tab].flatMap((k) => known.get(k) ?? [])
@@ -218,15 +196,6 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
 
   const pick = (t: TabName) => { setTab(t); setLimit(PAGE); history.replaceState(null, '', t === 'wishlist' ? '/profile' : `/profile?tab=${t}`) }
   const feed = origin && keys.wishlist.length ? `${origin}/api/calendar.ics?ids=${keys.wishlist.slice(0, 300).join(',')}` : ''
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(feed) } catch { return prompt('Calendar feed link', feed) as unknown as void }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2200)
-  }
-  const empty = {
-    wishlist: ['Your wishlist is empty', 'Tap the heart on any game or tournament to keep it here, or search for a game above.'],
-    played: ['No games marked as played yet', 'Open a game and press “Played”, or search for the ones you have played above.'],
-  }[tab]
 
   if (account.phase === 'out') {
     return (
@@ -260,29 +229,18 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
         ) : (
           <div className="rounded-panel border border-dashed border-line/12 px-6 py-14 text-center">
             <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-raised text-muted">{tab === 'wishlist' ? <Heart on={false} className="h-6 w-6" /> : <Icon name="pad" className="h-6 w-6" />}</span>
-            <p className="mt-5 text-lg font-semibold">{empty[0]}</p>
-            <p className="mx-auto mt-2 max-w-sm text-muted">{empty[1]}</p>
+            <p className="mt-5 text-lg font-semibold">{EMPTY[tab][0]}</p>
+            <p className="mx-auto mt-2 max-w-sm text-muted">{EMPTY[tab][1]}</p>
             <Link href="/#explore" className="btn btn-mark mt-7">Browse the calendar</Link>
           </div>
         )}
       </section>
 
       {tab === 'wishlist' && counts.wishlist > 0 && (
-        <div className="mt-14 grid grid-cols-1 gap-6 rounded-panel bg-panel p-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:p-8">
-          <div className="flex gap-4">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-mark text-black"><Icon name="calendar" className="h-6 w-6" /></span>
-            <div>
-              <h2 className="text-lg font-semibold">Add your wishlist to your calendar</h2>
-              <p className="mt-1 max-w-xl text-[15px] text-muted">Your calendar keeps the dates up to date when a release moves. Games you add to your wishlist later need a fresh link.</p>
-              <p className="mt-1 max-w-xl text-[13px] text-dim">The link holds the list of games on your wishlist (up to 300), so share it only with calendars you trust.</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <a href={feed ? `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal(feed))}` : undefined} target="_blank" rel="noopener noreferrer" className="btn btn-mark">Google Calendar</a>
-            <a href={feed ? webcal(feed) : undefined} className="btn btn-line">Apple or Outlook</a>
-            <button type="button" onClick={copy} disabled={!feed} className="btn btn-line"><Icon name={copied ? 'check' : 'copy'} />{copied ? 'Link copied' : 'Copy link'}</button>
-          </div>
-        </div>
+        <FeedPanel feed={feed} title="Add your wishlist to your calendar" as="h2" className="mt-14">
+          <p className="mt-1 max-w-xl text-[15px] text-muted">Your calendar keeps the dates up to date when a release moves. Games you add to your wishlist later need a fresh link.</p>
+          <p className="mt-1 max-w-xl text-[13px] text-dim">The link holds the list of games on your wishlist (up to 300), so share it only with calendars you trust.</p>
+        </FeedPanel>
       )}
 
       <section id="account" aria-labelledby="account-title" className="mt-20 border-t border-line/10 pt-8">

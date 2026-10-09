@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image' },
 }
 
-/** Before the first paint: a browser that signed in earlier is marked, so the header never flashes the wrong button. Storage can be blocked, hence the try. */
+/** Before the first paint: a browser that signed in before is marked, so the header never flashes the wrong button. */
 const SIGNED = "try{if(localStorage.getItem('dropdate:session')==='1')document.documentElement.setAttribute('data-signed','')}catch(e){}"
 
 export const viewport: Viewport = { themeColor: '#000000', colorScheme: 'dark' }

@@ -1,13 +1,9 @@
-// Budgets for whatever costs quota or money: the data sources' monthly allowances and the email service. Server side only.
-// Counted in the database when there is one (shared by every server instance), otherwise in this instance's memory.
+// Budgets for what costs quota or money (data sources, email). Server side only; counted in the database when there is one.
 import 'server-only'
 import { isIPv4, isIPv6 } from 'node:net'
 import { hasDb, hit } from './db'
 
-/**
- * The network a request comes from, as one string. An IPv6 address is kept to its first 64 bits: a household or a hosting plan
- * owns a whole /64, so counting full addresses would let one machine look like billions.
- */
+/** The network a request comes from. IPv6 is cut to its /64: one household or server owns a whole /64. */
 export function network(ip: string) {
   let a = ip.trim().replace(/^\[|\]$/g, '').replace(/%.*$/, '')
   const mapped = a.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i) // an IPv4 address in IPv6 clothes
@@ -18,20 +14,20 @@ export function network(ip: string) {
   return `${groups.slice(0, 4).map((g) => (parseInt(g, 16) || 0).toString(16)).join(':')}::/64`
 }
 
-/** Where the request comes from, for rate limits. On Vercel the platform sets these headers itself; on your own computer there are none. */
-export const clientIp = (req: { headers: { get(name: string): string | null } }) => network(req.headers.get('x-vercel-forwarded-for')?.split(',')[0] || req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'local')
+/** Where a request comes from, for rate limits (Vercel sets these headers; locally there are none). */
+export const clientIp = (req: { headers: { get(name: string): string | null } }) =>
+  network(req.headers.get('x-vercel-forwarded-for')?.split(',')[0] || req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'local')
 
-/** The mailbox an address leads to, for counting: a "+tag" is ignored, and so are the dots in a Gmail address. */
+/** The mailbox an address leads to: no "+tag", no dots in Gmail. */
 export function mailbox(email: string) {
   const [local = '', domain = ''] = email.toLowerCase().split('@')
-  const gmail = domain === 'gmail.com' || domain === 'googlemail.com'
-  const base = local.split('+')[0] || local
+  const gmail = domain === 'gmail.com' || domain === 'googlemail.com', base = local.split('+')[0] || local
   return `${gmail ? base.replace(/\./g, '') || base : base}@${gmail ? 'gmail.com' : domain}`
 }
 
 const memory = new Map<string, { n: number; until: number }>()
 
-/** Counts one use of `name` and says whether it is within `max` per `windowSec`. It never throws: if the database cannot be reached, this instance counts alone. */
+/** Counts a use of `name` against `max` per `windowSec`. Never throws: without the database, this instance counts alone. */
 export async function allow(name: string, max: number, windowSec: number): Promise<boolean> {
   if (hasDb()) {
     try { return (await hit(name, max, windowSec)).allowed } catch { /* count here instead */ }
@@ -42,6 +38,5 @@ export async function allow(name: string, max: number, windowSec: number): Promi
     memory.set(name, { n: 1, until: now + windowSec * 1000 })
     return true
   }
-  m.n++
-  return m.n <= max
+  return ++m.n <= max
 }

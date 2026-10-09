@@ -5,7 +5,7 @@ import { useEffect } from 'react'
 import { Footer } from '@/components/site'
 import { Header } from '@/components/ui'
 
-// What a visitor sees when a page breaks while it is being made: the site around it stays, and there is a way to try again or to go back.
+// A page that broke while being made: the site around it stays, with a way to try again or go back.
 export default function Failed({ error, retry, reset }: { error: Error & { digest?: string }; retry?: () => void; reset: () => void }) {
   useEffect(() => { console.error(error) }, [error])
   return (

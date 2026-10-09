@@ -3,17 +3,15 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type ReactNode, useEffect, useRef, useState, useTransition } from 'react'
-import { BROWSE_SORTS, type BrowseQuery, FIRST_YEAR, GENRES, PLATFORMS, browseHref } from '@/lib/core'
-import { Icon, Select } from './ui'
+import { BROWSE_SORTS, type BrowseQuery, FIRST_YEAR, GENRES, browseHref } from '@/lib/core'
+import { FilterBar, Icon, PlatformPills, Select, Sep } from './ui'
 
-// The controls of the browse page. The list itself is made on the server for the address in the bar: every control here only changes that address.
-
-const stop = <span aria-hidden className="mx-1 h-6 w-px shrink-0 bg-line/12" />
+// The browse page's controls. The server makes the list for the address in the bar: these only change the address.
 
 /** The search box and the filters; what the page found goes inside, and dims while a new answer is on its way. */
 export function BrowseShell({ query, thisYear, children }: { query: BrowseQuery; thisYear: number; children: ReactNode }) {
   const router = useRouter(), [pending, start] = useTransition(), [text, setText] = useState(query.q)
-  // The controls show where the page is heading, not only where it is: a new answer can take a second, and the next change builds on the last one.
+  // the controls show where the page is heading: an answer can take a second, and the next change builds on the last
   const [shown, setShown] = useState(query), ahead = useRef(query), sent = useRef(query.q)
   const go = (next: Partial<BrowseQuery>, replace = false) => {
     const to = { ...ahead.current, page: 1, ...next }
@@ -22,13 +20,12 @@ export function BrowseShell({ query, thisYear, children }: { query: BrowseQuery;
     setShown(to)
     start(() => { if (replace) router.replace(browseHref(to), { scroll: false }); else router.push(browseHref(to), { scroll: false }) })
   }
-  useEffect(() => { if (!pending) { ahead.current = query; setShown(query) } }, [query, pending]) // the answer arrived (or went nowhere): the page is the truth again
-  useEffect(() => { if (query.q !== sent.current) { sent.current = query.q; setText(query.q) } }, [query.q]) // back and forward, or a link: not the search this box made itself, which may have been typed on since
+  useEffect(() => { if (!pending) { ahead.current = query; setShown(query) } }, [query, pending]) // arrived (or not): the page is the truth again
+  useEffect(() => { if (query.q !== sent.current) { sent.current = query.q; setText(query.q) } }, [query.q]) // back, forward or a link, not this box
   useEffect(() => { // typing searches after a short pause
     if (text.trim() === ahead.current.q) return
     const t = setTimeout(() => { if (text.trim() !== ahead.current.q) go({ q: text.trim() }, true) }, 400) // (Enter may have searched already)
     return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text])
   const years = Array.from({ length: thisYear + 2 - FIRST_YEAR + 1 }, (_, i) => [String(thisYear + 2 - i)])
 
@@ -41,20 +38,13 @@ export function BrowseShell({ query, thisYear, children }: { query: BrowseQuery;
         {text && <button type="button" onClick={() => { setText(''); go({ q: '' }) }} className="btn btn-sm absolute top-1/2 right-3 -translate-y-1/2 text-muted hover:text-fg">Clear</button>}
       </form>
 
-      <div className="sticky top-[65px] z-30 -mx-4 mt-8 border-y border-line/10 bg-black/85 px-4 py-2.5 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:top-[76px] lg:mx-0 lg:rounded-full lg:border lg:px-2.5 lg:py-2">
-        <div className="flex items-center gap-3">
-          <div className="no-scrollbar -my-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1 [mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] xl:[mask-image:none]">
-            <Select label="Year" value={shown.year || 'any'} onChange={(v) => go({ year: v === 'any' ? '' : v })} options={[['any', 'Any year'], ...years]} className="w-[122px]" />
-            {stop}
-            <div role="group" aria-label="Platform" className="flex shrink-0 gap-1.5">
-              {PLATFORMS.map((p) => <button key={p} type="button" onClick={() => go({ platform: shown.platform === p ? '' : p })} aria-pressed={shown.platform === p} className="pill">{p}</button>)}
-            </div>
-            {stop}
-            <Select label="Genre" value={shown.genre || 'any'} onChange={(v) => go({ genre: v === 'any' ? '' : v })} options={[['any', 'All genres'], ...GENRES.map(([slug, name]) => [slug, name])]} className="w-[168px]" />
-          </div>
-          <Select label="Sort by" value={shown.sort} onChange={(v) => go({ sort: v })} options={Object.entries(BROWSE_SORTS)} />
-        </div>
-      </div>
+      <FilterBar end={<Select label="Sort by" value={shown.sort} onChange={(v) => go({ sort: v })} options={Object.entries(BROWSE_SORTS)} />}>
+        <Select label="Year" value={shown.year || 'any'} onChange={(v) => go({ year: v === 'any' ? '' : v })} options={[['any', 'Any year'], ...years]} className="w-[122px]" />
+        <Sep />
+        <PlatformPills value={shown.platform} onChange={(platform) => go({ platform })} />
+        <Sep />
+        <Select label="Genre" value={shown.genre || 'any'} onChange={(v) => go({ genre: v === 'any' ? '' : v })} options={[['any', 'All genres'], ...GENRES.map(([slug, name]) => [slug, name])]} className="w-[168px]" />
+      </FilterBar>
 
       <div aria-busy={pending} className={`transition-opacity duration-200 ${pending ? 'opacity-50' : ''}`}>{children}</div>
     </>

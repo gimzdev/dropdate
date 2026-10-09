@@ -10,7 +10,7 @@ import { ACCOUNTS, SITE, gap, googleUrl, lite, longDate, monthLabel, scoreTone, 
 import { getEvents, getGame } from '@/lib/data'
 
 export const revalidate = 21600
-export const generateStaticParams = async () => [] // each page is built on its first visit, then cached and refreshed every 6 hours
+export const generateStaticParams = async () => [] // built on first visit, then cached and refreshed every 6 hours
 
 type Props = { params: Promise<{ slug: string }> }
 

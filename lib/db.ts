@@ -6,47 +6,42 @@ import { pgConfig } from './pgconfig.mjs'
 
 const g = globalThis as typeof globalThis & { __dd_pool?: Pool }
 
-/** Accounts exist only when a database is configured; without one the site works as before, with the list kept in the browser. */
+/** Accounts exist only when a database is configured. */
 export const hasDb = () => !!process.env.DATABASE_URL
 
-function pool() {
+/** A small pool that lets idle clients go (Neon scales to zero). No startup options: Neon's pooler (PgBouncer) refuses them. */
+export function db() {
   if (!g.__dd_pool) {
     const url = process.env.DATABASE_URL
     if (!url) throw new Error('DATABASE_URL is not set')
-    // Neon closes idle connections and scales to zero: keep the pool small, let idle clients go, and survive their errors.
-    // No server-side options (statement_timeout and friends): Neon's pooled address is a PgBouncer that refuses unknown startup parameters.
     const p = new Pool(pgConfig(url, { max: 8, idleTimeoutMillis: 20_000, connectionTimeoutMillis: 8_000, query_timeout: 10_000, keepAlive: true }))
     p.on('error', (e) => console.warn('[dropdate] an idle database connection was closed:', e.message))
     g.__dd_pool = p
   }
   return g.__dd_pool
 }
-export const db = pool
 
-/** A connection that died while nobody was using it (a serverless instance that slept, a database that scaled to zero). */
+/** A connection that died idle (a sleeping instance, a database scaled to zero). */
 const dead = (e: unknown) => /Connection terminated|ECONNRESET|EPIPE|ETIMEDOUT|server closed the connection|terminating connection/i.test(e instanceof Error ? e.message : String(e))
 
-/** One statement. If it meets a dead connection, the pool has dropped it, so a second try goes out on a fresh one. Statements here are safe to repeat. */
+/** One statement; a dead connection gets a second try on a fresh one (statements here are safe to repeat). */
 export async function q<T extends QueryResultRow = QueryResultRow>(text: string, params: unknown[] = []) {
-  try { return (await pool().query<T>(text, params)).rows } catch (e) {
+  try { return (await db().query<T>(text, params)).rows } catch (e) {
     if (!dead(e)) throw e
-    return (await pool().query<T>(text, params)).rows
+    return (await db().query<T>(text, params)).rows
   }
 }
 
-/** A connection with a transaction open. A dead one is thrown away and replaced once. */
-async function begin(): Promise<PoolClient> {
+/** A transaction. A connection dead at the start is replaced once; one that dies inside is thrown away. */
+export async function tx<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
+  let c: PoolClient
   for (let attempt = 0; ; attempt++) {
-    const c = await pool().connect()
-    try { await c.query('begin'); return c } catch (e) {
+    c = await db().connect()
+    try { await c.query('begin'); break } catch (e) {
       c.release(e instanceof Error ? e : true)
       if (attempt || !dead(e)) throw e
     }
   }
-}
-
-export async function tx<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
-  const c = await begin()
   let broken: Error | undefined
   try {
     const out = await fn(c)
@@ -57,11 +52,11 @@ export async function tx<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
     await c.query('rollback').catch(() => {})
     throw e
   } finally {
-    c.release(broken) // a connection that died is thrown away, not handed to the next request
+    c.release(broken)
   }
 }
 
-/** The signing secret. Production refuses to run without one; builds and local runs fall back to a fixed development value. */
+/** The signing secret: required in production, a fixed development value elsewhere. */
 export function secret() {
   const s = process.env.BETTER_AUTH_SECRET
   if (s) return s
@@ -69,27 +64,23 @@ export function secret() {
   return 'dropdate-development-secret-do-not-use-in-production'
 }
 
-/**
- * Counts one hit against `key` in a fixed window and says whether it is still allowed. A single statement, so
- * simultaneous requests cannot all slip under the limit. The key is hashed with the secret first: the table never
- * holds an IP address or an email in readable form.
- */
+/** Rate-limit keys are hashed: the table never holds an IP address or an email in readable form. */
 export const hashKey = (key: string) => createHmac('sha256', secret()).update(key).digest('base64url')
 
+/** Counts a hit against `key` in a fixed window, in one statement (simultaneous requests cannot all slip under). */
 export async function hit(key: string, max: number, windowSec: number): Promise<{ allowed: boolean; retryAfter: number }> {
-  const hashed = hashKey(key)
   const [row] = await q<{ hits: number; retry: number }>(
     `insert into dd_throttle as t (key, hits, started_at) values ($1, 1, now())
      on conflict (key) do update set
        hits = case when t.started_at <= now() - make_interval(secs => $2::int) then 1 else t.hits + 1 end,
        started_at = case when t.started_at <= now() - make_interval(secs => $2::int) then now() else t.started_at end
      returning hits, greatest(1, ceil(extract(epoch from (started_at + make_interval(secs => $2::int) - now()))))::int as retry`,
-    [hashed, windowSec],
+    [hashKey(key), windowSec],
   )
   return { allowed: row.hits <= max, retryAfter: row.retry }
 }
 
-/** Same-origin check for requests that change something: browsers always send Origin or Sec-Fetch-Site on cross-site requests. */
+/** Same-origin check for changes: browsers always send Origin or Sec-Fetch-Site cross-site. */
 export function sameOrigin(req: Request, base: string) {
   const site = req.headers.get('sec-fetch-site')
   if (site && site !== 'same-origin' && site !== 'none') return false

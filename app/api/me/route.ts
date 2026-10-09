@@ -20,14 +20,13 @@ export async function GET(req: Request) {
 export async function DELETE(req: Request) {
   const user = await guard(req, { write: true, rate: ['delete', 5, 3600] })
   if (user instanceof Response) return user
-  // Erase first: the sessions go with the account. Only when that has worked is this browser told to forget its cookie.
+  // Erase first (the sessions go with the account); only then is this browser told to forget its cookie
   try { await deleteAccount(user) } catch (e) {
     console.error('[dropdate] could not delete an account:', e instanceof Error ? e.message : e)
     return fail(500, 'We could not delete the account. Nothing was changed. Try again in a minute.')
   }
   const res = NextResponse.json({ ok: true }, { headers: NO_STORE })
-  // Tell this browser to forget its sign-in. Next turns an expiry of "Max-Age=0" into an ordinary empty cookie whenever it has
-  // also been asked to renew the session in the same request, so every cookie carries a date in the past as well.
+  // Next turns "Max-Age=0" into an ordinary empty cookie when the same request also renewed the session, so each carries a past date too
   try {
     const { authCookies: c } = await auth().$context
     for (const { name, attributes: a } of [c.sessionToken, c.sessionData, c.dontRememberToken])
