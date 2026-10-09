@@ -122,3 +122,41 @@ export function afterChange(f: Flags, list: ListName, on: boolean): Flags {
 export const safeNext = (n?: string | null, fallback = '/profile') => (n && /^\/(?![/\\])(?!signin(?:[/?#]|$))[^\x00-\x20\x7f-\uffff\\]*$/.test(n) ? n : fallback)
 /** "March 2026" for a timestamp: when someone joined. */
 export const monthYear = (iso: string) => new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(new Date(iso))
+
+// ── Browse: every game RAWG knows, filtered and in pages (shared by the page and its filters) ──
+
+/** RAWG's genres: [the name in its address, the name shown]. */
+export const GENRES: readonly (readonly [string, string])[] = [
+  ['action', 'Action'], ['adventure', 'Adventure'], ['role-playing-games-rpg', 'RPG'], ['shooter', 'Shooter'], ['strategy', 'Strategy'], ['simulation', 'Simulation'],
+  ['puzzle', 'Puzzle'], ['platformer', 'Platformer'], ['racing', 'Racing'], ['sports', 'Sports'], ['fighting', 'Fighting'], ['indie', 'Indie'], ['arcade', 'Arcade'],
+  ['casual', 'Casual'], ['massively-multiplayer', 'Massively multiplayer'], ['family', 'Family'], ['card', 'Card'], ['board-games', 'Board games'], ['educational', 'Educational'],
+]
+export const BROWSE_SORTS = { popular: 'Most popular', score: 'Best reviewed', newest: 'Newest', oldest: 'Oldest', name: 'A to Z' } as const
+export type BrowseSort = keyof typeof BROWSE_SORTS
+/** Games per page, and how many pages one search can go through: past that, a year, a platform or a genre narrows it down. */
+export const BROWSE_PAGE = 40, BROWSE_PAGES = 25
+export const FIRST_YEAR = 1970
+export interface BrowseQuery { q: string; year: string; platform: Platform | ''; genre: string; sort: BrowseSort; page: number }
+
+/** What an address asks for, checked against what exists: anything else is ignored, so only a small set of questions ever reaches the data source. */
+export function parseBrowse(raw: Record<string, string | string[] | undefined>, thisYear: number): BrowseQuery {
+  const one = (k: string) => { const v = raw[k]; return (Array.isArray(v) ? v[0] : v) ?? '' }
+  const year = /^\d{4}$/.test(one('year')) && +one('year') >= FIRST_YEAR && +one('year') <= thisYear + 2 ? one('year') : ''
+  const sort = (Object.keys(BROWSE_SORTS) as BrowseSort[]).find((s) => s === one('sort')) ?? 'popular'
+  return {
+    q: one('q').replace(/\s+/g, ' ').trim().slice(0, 60), year, platform: PLATFORMS.find((p) => p === one('platform')) ?? '',
+    genre: GENRES.find(([slug]) => slug === one('genre'))?.[0] ?? '', sort, page: Math.min(BROWSE_PAGES, Math.max(1, Math.floor(+one('page')) || 1)),
+  }
+}
+/** The address of a browse page; what is on its default is left out. */
+export function browseHref(q: Partial<BrowseQuery>) {
+  const p = new URLSearchParams()
+  if (q.q) p.set('q', q.q)
+  if (q.year) p.set('year', q.year)
+  if (q.platform) p.set('platform', q.platform)
+  if (q.genre) p.set('genre', q.genre)
+  if (q.sort && q.sort !== 'popular') p.set('sort', q.sort)
+  if (q.page && q.page > 1) p.set('page', String(q.page))
+  const s = p.toString()
+  return s ? `/browse?${s}` : '/browse'
+}

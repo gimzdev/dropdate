@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { type AnchorHTMLAttributes, type ReactNode, type SyntheticEvent, type TouchEvent, useEffect, useRef, useState } from 'react'
 import { useSaved } from '@/lib/account'
 import { ACCOUNTS, type Ev, ago, href, iso, longDate, monthLabel, monthShort, scoreTone, status, toDate, weekday } from '@/lib/core'
@@ -128,14 +128,14 @@ export function BigDate({ date, tba, size, unknown, label }: { date: string; tba
 
 /** A heart on artwork, a quiet heart in lists, or a labelled button: the wishlist. */
 export function SaveButton({ id, title, label, variant = 'art', needsAccount }: { id: string; title: string; label?: boolean; variant?: 'art' | 'glass' | 'plain'; needsAccount?: boolean }) {
-  const { has, toggle, signedIn, phase } = useSaved(), router = useRouter(), path = usePathname()
+  const { has, toggle, signedIn, phase } = useSaved(), router = useRouter()
   const on = has(id), [bump, setBump] = useState(0)
   const props = {
     type: 'button' as const, 'aria-pressed': on, ...(!label && { 'aria-label': `Add ${title} to your wishlist`, title: on ? 'On your wishlist' : 'Add to your wishlist' }),
     onClick: (ev: { preventDefault(): void; stopPropagation(): void }) => {
       ev.preventDefault()
       ev.stopPropagation()
-      const signIn = () => router.push(`/signin?next=${encodeURIComponent(path)}`)
+      const signIn = () => router.push(`/signin?next=${encodeURIComponent(location.pathname + location.search)}`) // back to the same filters, not only the same page
       // a game the calendar does not hold can only be kept in an account
       if (needsAccount && !signedIn && phase !== 'loading') return signIn()
       setBump((n) => n + 1)
@@ -173,6 +173,19 @@ export function Section({ id, title, lede, action, className = 'border-t border-
   )
 }
 
+/** A dropdown; anything but its first option (the default) is highlighted. */
+export function Select<T extends string>({ label, value, onChange, options, className = '' }: { label: string; value: T; onChange: (v: T) => void; options: string[][]; className?: string }) {
+  return (
+    <span className="relative shrink-0">
+      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value as T)}
+        className={`h-10 appearance-none truncate rounded-full bg-transparent pr-9 pl-4 text-sm font-semibold ring-1 transition ring-inset hover:ring-line/30 ${value !== options[0][0] ? 'text-fg ring-fg' : 'text-muted ring-line/12'} ${className}`}>
+        {options.map(([v, text = v]) => <option key={v} value={v} className="bg-panel text-fg">{text}</option>)}
+      </select>
+      <Icon name="down" className="pointer-events-none absolute top-1/2 right-3.5 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+    </span>
+  )
+}
+
 // ── Header ──────────────────────────────────────────────────────────────
 
 /** The logo: on the home page it scrolls to the very top (clearing any #section or ?search); anywhere else it goes home. */
@@ -187,7 +200,7 @@ export function HomeLink({ className, children }: { className?: string; children
   )
 }
 
-const NAV = [['This week', '/#week'], ['Upcoming', '/#upcoming'], ['Esports', '/#esports'], ['Calendar', '/#explore'], ['API', '/docs']]
+const NAV = [['This week', '/#week'], ['Upcoming', '/#upcoming'], ['Esports', '/#esports'], ['Calendar', '/#explore'], ['Browse', '/browse'], ['API', '/docs']]
 
 /** With accounts the wishlist lives in the profile. Without them there is no profile, so it keeps a button here that opens it in the calendar. */
 function WishlistButton({ className, onClick }: { className: string; onClick: () => void }) {
@@ -257,8 +270,11 @@ export function Score({ n, className = '' }: { n: number; className?: string }) 
 // Out today in green (a live tournament in red), the coming week in yellow, later in grey
 export const TONE = { live: 'text-go', soon: 'text-mark', future: 'text-muted', past: 'text-dim' }
 
-/** An event as a card. With `row`, phones get a compact row (artwork beside the date) so long lists stay scannable. */
-export function Card({ e, today, row }: { e: Ev; today: string; row?: boolean }) {
+/**
+ * An event as a card. With `row`, phones get a compact row (artwork beside the date) so long lists stay scannable. `when` replaces the
+ * words under the title (browsing an archive says "2015", not "Out now"). `outside` marks a game the calendar does not hold: it can only be kept in an account.
+ */
+export function Card({ e, today, row, when, outside }: { e: Ev; today: string; row?: boolean; when?: string; outside?: boolean }) {
   const esport = e.kind === 'tournament', s = status(e, today), frames = !esport && e.thumb ? [e.thumb, ...e.shots] : []
   const [frame, setFrame] = useState(0), timer = useRef<ReturnType<typeof setInterval>>(undefined)
   useEffect(() => () => clearInterval(timer.current), [])
@@ -292,13 +308,13 @@ export function Card({ e, today, row }: { e: Ev; today: string; row?: boolean })
           <div className="min-w-0 pt-px">
             <h3 className="line-clamp-2 text-[15px] leading-snug font-semibold decoration-line/40 underline-offset-[3px] group-hover:underline">{e.title}</h3>
             <p className="mt-1 flex flex-wrap gap-x-2.5 text-[13px] leading-snug">
-              <span className={`font-semibold ${s.tone === 'live' && esport ? 'text-live' : TONE[s.tone]}`}>{s.label}</span>
+              <span className={`font-semibold ${when ? 'text-muted' : s.tone === 'live' && esport ? 'text-live' : TONE[s.tone]}`}>{when ?? s.label}</span>
               <span className="text-muted">{esport ? e.genres[0] : e.platforms.map((p) => (p === 'PlayStation' ? 'PS' : p)).join(', ')}</span>
             </p>
           </div>
         </div>
       </Open>
-      <div className={row ? 'absolute top-1.5 left-[94px] sm:top-2.5 sm:right-2.5 sm:left-auto' : 'absolute top-2.5 right-2.5'}><SaveButton id={e.id} title={e.title} /></div>
+      {(!outside || ACCOUNTS) && <div className={row ? 'absolute top-1.5 left-[94px] sm:top-2.5 sm:right-2.5 sm:left-auto' : 'absolute top-2.5 right-2.5'}><SaveButton id={e.id} title={e.title} needsAccount={outside} /></div>}
     </article>
   )
 }

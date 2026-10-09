@@ -1,6 +1,6 @@
 {
   "name": "dropdate",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "private": true,
   "engines": { "node": ">=20.9.0" },
   "scripts": { "dev": "next dev", "build": "node scripts/migrate.mjs --if-configured && next build", "start": "next start", "typecheck": "next typegen && tsc --noEmit", "migrate": "node scripts/migrate.mjs" },

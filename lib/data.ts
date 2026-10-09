@@ -1,10 +1,13 @@
 // Live data, server side only. Every source is optional and fails soft: whatever answers is shown.
-//   RAWG        releases (upcoming + last 60 days), artwork, game pages
-//   Steam       the most wishlisted and most anticipated upcoming PC games (RAWG only lists a few dozen)
+//   RAWG        releases (upcoming + last 60 days), artwork, game pages, and every other game it knows (search, browse)
+//   Steam       the most wishlisted and most anticipated upcoming PC games (RAWG only lists a few dozen), and the Metacritic
+//               score of recent PC games (RAWG's copy of Metacritic stops at older games)
 //   PandaScore  esports series: running, upcoming and just finished
 
+import { unstable_cache } from 'next/cache'
 import { cache } from 'react'
-import { type Ev, type Game, type Payload, type Platform, iso, shift } from './core'
+import { type BrowseQuery, type Ev, type Game, type Payload, type Platform, BROWSE_PAGE, BROWSE_PAGES, iso, lite, shift } from './core'
+import { allow } from './limit'
 
 const env = process.env
 const RAWG = env.RAWG_BASE || 'https://api.rawg.io/api', STEAM = env.STEAM_BASE || 'https://store.steampowered.com', PANDA = env.PANDA_BASE || 'https://api.pandascore.co'
@@ -65,11 +68,55 @@ function rawgEv(g: Rawg, lenient = false): Ev | null {
   }
 }
 
-async function rawg(dates: string, max: number): Promise<Ev[]> {
+const RAWG_STEAM = 1 // the id RAWG gives the Steam store
+const onSteam = (g: Rawg) => !!g.stores?.some((s) => s.store.id === RAWG_STEAM)
+
+/** `steamy` collects the games RAWG lists on Steam, which is where a score can be found for the ones RAWG has none for. */
+async function rawg(dates: string, max: number, steamy: Set<string>): Promise<Ev[]> {
   const key = env.RAWG_API_KEY
   if (!key) return []
   const all = await pages(max, (p) => get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&dates=${dates}&ordering=-added&page_size=40&page=${p}`))
-  return all.flatMap((r) => r?.results ?? []).flatMap((g) => rawgEv(g) ?? [])
+  const games = all.flatMap((r) => r?.results ?? [])
+  for (const g of games) if (onSteam(g)) steamy.add(`rawg-${g.id}`)
+  return games.flatMap((g) => rawgEv(g) ?? [])
+}
+
+// ── Metacritic scores from Steam ────────────────────────────────────────
+// RAWG keeps Metacritic scores for older games and has none for what came out in the last couple of years. Steam still shows Metacritic's
+// score on the store page of the PC games that have one, so a game RAWG lists on Steam and has no score for is looked up there.
+
+const steamOn = () => env.STEAM_UPCOMING !== 'off'
+/** The Steam app a list of RAWG store links points to. */
+const steamAppOf = (stores?: { results?: { url?: string }[] } | null) => stores?.results?.map((s) => s.url?.match(/store\.steampowered\.com\/app\/(\d+)/)?.[1]).find(Boolean)
+const rawgStores = (id: string) => get<{ results?: { url?: string }[] }>(`${RAWG}/games/${id}/stores?key=${env.RAWG_API_KEY}`, 7 * DAY)
+/** Steam's copy of a game's Metacritic score: the number, null when the store page shows none, undefined when Steam could not be asked. */
+async function steamScore(appid: string): Promise<number | null | undefined> {
+  const res = await get<Record<string, { data?: { metacritic?: { score?: number } } }>>(`${STEAM}/api/appdetails?appids=${appid}&filters=metacritic`, DAY)
+  return res === undefined ? undefined : (res?.[appid]?.data?.metacritic?.score || null)
+}
+
+/**
+ * Scores for the released games on the calendar that RAWG has none for and lists on Steam. Both answers are kept (RAWG's store links a week,
+ * Steam's score a day), so a refresh only asks about games it has not seen. If Steam throttles or a cold start runs long it stops asking:
+ * what is missing now is fetched on the next refresh.
+ */
+async function steamScores(games: Ev[], steamy: Set<string>, today: string): Promise<Map<string, number>> {
+  const found = new Map<string, number>()
+  if (!env.RAWG_API_KEY || !steamOn()) return found
+  const todo = games.filter((e) => !e.metacritic && e.start <= today && steamy.has(e.id))
+  let next = 0, down = false
+  const until = Date.now() + 20000
+  await Promise.all(Array.from({ length: 6 }, async () => {
+    for (let i = next++; i < todo.length; i = next++) {
+      if (down || Date.now() > until) return
+      const appid = steamAppOf(await rawgStores(todo[i].id.slice(5)))
+      if (!appid) continue
+      const score = await steamScore(appid)
+      if (score === undefined) { down = true; return }
+      if (score) found.set(todo[i].id, score)
+    }
+  }))
+  return found
 }
 
 async function rawgGame(slug: string): Promise<Game | null> {
@@ -85,10 +132,13 @@ async function rawgGame(slug: string): Promise<Game | null> {
     at<{ results?: { preview: string; data: { max?: string; 480?: string } }[] }>('/movies'), at<{ results?: { store_id: number; url: string }[] }>('/stores'),
   ])
   const store = new Map((g.stores ?? []).map((s) => [s.store.id, s.store.name])), clip = movies?.results?.find((m) => m.data.max || m.data[480])
+  const out = !!g.released && g.released <= iso(new Date()) // a game that is not out has no score to look for
+  const app = g.metacritic || !out || !steamOn() ? undefined : steamAppOf(stores) // no score at RAWG: Steam's store page may have one
+  const fromSteam = app ? await steamScore(app) : undefined
   return {
     id: `rawg-${g.id}`, slug: g.slug, name: g.name, description: g.description_raw?.trim() || undefined, released: g.released ?? undefined,
     website: g.website || undefined, image: g.background_image ? rawgImg(g.background_image, 1920) : undefined,
-    rating: g.rating || undefined, metacritic: g.metacritic || undefined, esrb: g.esrb_rating?.name, playtime: g.playtime || undefined,
+    rating: g.rating || undefined, metacritic: g.metacritic || fromSteam || undefined, esrb: g.esrb_rating?.name, playtime: g.playtime || undefined,
     genres: names(g.genres), tags: names(g.tags?.filter((t) => !t.language || t.language === 'eng')).slice(0, 10),
     platforms: (g.platforms ?? []).map((p) => p.platform.name), developers: names(g.developers), publishers: names(g.publishers),
     screenshots: (shots?.results ?? []).slice(0, 8).map((s) => rawgImg(s.image, 1920)),
@@ -104,6 +154,51 @@ export async function searchGames(q: string): Promise<Found[]> {
   if (!key || q.trim().length < 2) return []
   const res = await get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&search=${encodeURIComponent(q.trim().slice(0, 80))}&search_precise=true&page_size=8`)
   return (res?.results ?? []).map((g) => ({ key: `rawg-${g.id}`, slug: g.slug, title: g.name, released: g.released ?? undefined, thumb: g.background_image ? rawgImg(g.background_image, 640) : '', metacritic: g.metacritic || undefined }))
+}
+
+// ── Browse: any game RAWG knows, a page at a time ───────────────────────
+
+/** Why a page of games could not be had: 'busy' = what browsing may ask RAWG for today is spent, 'down' = RAWG did not answer. */
+export class BrowseError extends Error {
+  constructor(public why: 'busy' | 'down') { super(why) }
+}
+/**
+ * What browsing may ask RAWG for in a day, however many people browse. RAWG's monthly allowance (20,000 on the free plan) is shared with the
+ * calendar (about 6,500), game pages and search, so this keeps a crawler or a curious crowd from using it up. Pages already looked at cost nothing.
+ */
+const BROWSE_PER_DAY = Number(env.BROWSE_PER_DAY) || 250
+const FAMILY: Record<Platform, string> = { PC: '1', PlayStation: '2', Xbox: '3', Nintendo: '7', Mobile: '4,8' } // RAWG's platform families
+const ORDER = { popular: '-added', score: '-metacritic', newest: '-released', oldest: 'released', name: 'name' } as const
+
+function browseUrl(q: BrowseQuery, today: string) {
+  const p = new URLSearchParams({ page_size: String(BROWSE_PAGE), page: String(q.page), ordering: ORDER[q.sort] })
+  if (q.year) p.set('dates', `${q.year}-01-01,${q.year}-12-31`)
+  else if (q.sort === 'newest' || q.sort === 'oldest') p.set('dates', `1950-01-01,${today}`) // ordered by date means games that are out, not placeholders years ahead
+  if (q.platform) p.set('parent_platforms', FAMILY[q.platform])
+  if (q.genre) p.set('genres', q.genre)
+  if (q.sort === 'score') p.set('metacritic', '1,100')
+  if (q.q) p.set('search', q.q)
+  return `${RAWG}/games?${p}`
+}
+
+interface Browsed { count: number; items: Ev[] }
+/** One page of games, kept by Next (shared by every server instance). The function runs only when the page is not kept: that is when RAWG is asked, and when the day's allowance is spent. */
+const browsed = (revalidate: number) => unstable_cache(async (url: string): Promise<Browsed> => {
+  const key = env.RAWG_API_KEY
+  if (!key) throw new BrowseError('down')
+  if (!(await allow('browse:rawg', BROWSE_PER_DAY, 86400))) throw new BrowseError('busy')
+  const res = await get<{ count?: number; results?: Rawg[] }>(`${url}&key=${key}`, revalidate)
+  if (res === undefined) throw new BrowseError('down') // never kept: the next visit asks again
+  return { count: res?.count ?? 0, items: (res?.results ?? []).flatMap((g) => rawgEv(g) ?? []).map(lite) } // (a page past the end is a 404: no games)
+}, ['browse', String(revalidate)], { revalidate })
+const freshPages = browsed(12 * HOUR), settledPages = browsed(7 * DAY)
+
+/** Games from the whole of RAWG, filtered and sorted by RAWG: the same 40 for everyone who asks the same thing. Throws a BrowseError. */
+export async function browseGames(q: BrowseQuery): Promise<Browsed & { pages: number }> {
+  const today = iso(new Date())
+  const over = !q.q && !!q.year && +q.year < +today.slice(0, 4) - 1 // a year that is over barely changes, so what was looked up stays for a week
+  const out = await (over ? settledPages : freshPages)(browseUrl(q, today))
+  return { ...out, pages: Math.min(BROWSE_PAGES, Math.ceil(out.count / BROWSE_PAGE)) }
 }
 
 // ── Steam (no key needed) ───────────────────────────────────────────────
@@ -233,13 +328,18 @@ const safe = <T,>(p: Promise<T[]>) => p.catch(() => [] as T[]) // one failing so
 /** Everything, merged and sorted by date, without empty fields (they would ship to every browser). */
 async function load() {
   const today = iso(new Date())
+  const steamy = new Set<string>()
   const [upcoming, recent, wished, soon, sports] = await Promise.all([
-    safe(rawg(`${today},${shift(today, 730)}`, 5)), safe(rawg(`${shift(today, -60)},${shift(today, -1)}`, 4)),
+    safe(rawg(`${today},${shift(today, 730)}`, 5, steamy)), safe(rawg(`${shift(today, -60)},${shift(today, -1)}`, 4, steamy)),
     safe(steamList('popularwishlist', 1500)), safe(steamList('popularcomingsoon', 600)), safe(esports()),
   ])
   const releases = [...new Map([...upcoming, ...recent].map((e) => [e.id, e])).values()]
-  const pc = await safe(steam([...wished, ...soon], new Set(releases.map((e) => same(e.title))), today))
-  const events = [...releases, ...pc, ...sports].sort((a, b) => a.start.localeCompare(b.start)).map((e) => Object.fromEntries(Object.entries(e).filter(([, v]) => v !== undefined)) as Ev)
+  const [pc, scores] = await Promise.all([
+    safe(steam([...wished, ...soon], new Set(releases.map((e) => same(e.title))), today)),
+    steamScores(releases, steamy, today).catch(() => new Map<string, number>()), // a failing lookup only leaves games without a score
+  ])
+  const scored = releases.map((e) => (scores.has(e.id) ? { ...e, metacritic: scores.get(e.id) } : e))
+  const events = [...scored, ...pc, ...sports].sort((a, b) => a.start.localeCompare(b.start)).map((e) => Object.fromEntries(Object.entries(e).filter(([, v]) => v !== undefined)) as Ev)
   if (!events.length) throw new Error('No source answered')
   return { events, updated: new Date().toISOString(), sources: { rawg: releases.length, steam: pc.length, esports: sports.length } }
 }
@@ -266,7 +366,12 @@ export async function fromSource(key: string): Promise<Ev | null> {
   if (src === 'rawg' && env.RAWG_API_KEY) {
     const g = await get<Rawg>(`${RAWG}/games/${id}?key=${env.RAWG_API_KEY}`)
     if (g === undefined) throw new Error('RAWG is unreachable')
-    return g ? rawgEv(g, true) : null
+    const ev = g ? rawgEv(g, true) : null
+    if (ev && g && !ev.metacritic && ev.start && ev.start <= iso(new Date()) && onSteam(g) && steamOn()) { // no score at RAWG: Steam's store page may have one (a failure here only leaves the game without)
+      const app = steamAppOf(await rawgStores(id)), score = app ? await steamScore(app) : null
+      if (score) ev.metacritic = score
+    }
+    return ev
   }
   if (src === 'steam') {
     const a = await steamApp(id)

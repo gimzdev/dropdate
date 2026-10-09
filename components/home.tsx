@@ -3,9 +3,9 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type KeyboardEvent, type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { type Ev, type Kind, type Payload, type Platform, PLATFORMS, gap, googleUrl, href, iso, longDate, monthLabel, monthShort, range, shift, srcSet, status, toDate, webcal, weekday } from '@/lib/core'
+import { type Ev, type Kind, type Payload, type Platform, PLATFORMS, browseHref, gap, googleUrl, href, iso, longDate, monthLabel, monthShort, range, shift, srcSet, status, toDate, webcal, weekday } from '@/lib/core'
 import { type Chip, removeChip, search } from '@/lib/search'
-import { BigDate, Card, Circled, Countdown, DateBlock, EXPLORE_EVENT, type ExploreIntent, Heart, Icon, Img, Open, SaveButton, Score, Section, Thumb, Updated, fallback, useExplore, useSaved, useSwipe, useToday } from './ui'
+import { BigDate, Card, Circled, Countdown, DateBlock, EXPLORE_EVENT, type ExploreIntent, Heart, Icon, Img, Open, SaveButton, Score, Section, Select, Thumb, Updated, fallback, useExplore, useSaved, useSwipe, useToday } from './ui'
 
 // The home page: the biggest upcoming releases one at a time, the week ahead as a wall calendar, the most
 // anticipated games, the month's biggest launches, the esports schedule and the searchable calendar.
@@ -297,19 +297,6 @@ function Segment<T extends string>({ label, value, onChange, items }: { label: s
   )
 }
 
-/** A dropdown; anything but its first option (the default) is highlighted. */
-function Select<T extends string>({ label, value, onChange, options, className = '' }: { label: string; value: T; onChange: (v: T) => void; options: string[][]; className?: string }) {
-  return (
-    <span className="relative shrink-0">
-      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value as T)}
-        className={`h-10 appearance-none truncate rounded-full bg-transparent pr-9 pl-4 text-sm font-semibold ring-1 transition ring-inset hover:ring-line/30 ${value !== options[0][0] ? 'text-fg ring-fg' : 'text-muted ring-line/12'} ${className}`}>
-        {options.map(([v, text = v]) => <option key={v} value={v} className="bg-panel text-fg">{text}</option>)}
-      </select>
-      <Icon name="down" className="pointer-events-none absolute top-1/2 right-3.5 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-    </span>
-  )
-}
-
 export function Explorer({ data }: { data: Payload }) {
   const saved = useSaved()
   const [today, setToday] = useState(data.today), [origin, setOrigin] = useState(''), [q, setQ] = useState('')
@@ -388,7 +375,12 @@ export function Explorer({ data }: { data: Payload }) {
   return (
     <Section id="explore" title="Search the calendar"
       lede={<>Type a game, a platform or a date. Plain English works, like <q>switch games in december</q> or <q>esports this weekend</q>.</>}
-      action={<p className="inline-flex items-center gap-2 text-sm text-muted"><span className="h-2 w-2 rounded-full bg-go" />Live data, updated <Updated at={data.updated} /></p>}>
+      action={(
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <p className="inline-flex items-center gap-2 text-sm text-muted"><span className="h-2 w-2 rounded-full bg-go" />Live data, updated <Updated at={data.updated} /></p>
+          <Link href="/browse" className="btn btn-sm btn-line">Browse every game</Link>
+        </div>
+      )}>
       {data.error && <div role="alert" className="mb-6 rounded-[14px] bg-live/10 p-4 text-[15px] text-[#ffb7be] ring-1 ring-live/30 ring-inset"><strong className="font-semibold">Live data is unavailable.</strong> {data.error} Check the API keys in your environment, then redeploy.</div>}
       {data.stale && !data.error && <div role="status" className="mb-6 rounded-[14px] bg-mark/10 p-3.5 text-[15px] text-[#ffe8a3] ring-1 ring-mark/25 ring-inset">The data sources did not answer just now, so this is the last good data. It refreshes on its own.</div>}
 
@@ -441,8 +433,11 @@ export function Explorer({ data }: { data: Payload }) {
           {!data.error && !list.length && (
             <div className={`${empty} py-16`}>
               <p className="text-lg font-semibold">{onlySaved ? 'Your wishlist is empty' : 'No matches'}</p>
-              <p className="mx-auto mt-2 max-w-sm text-muted">{onlySaved ? 'Tap the heart on any game or tournament to keep it here. Then add the whole wishlist to your calendar in one go.' : 'Try fewer words, another month, or clear the filters.'}</p>
-              <button type="button" className="btn btn-mark mt-7" onClick={reset}>{onlySaved ? 'Browse the calendar' : 'Clear filters'}</button>
+              <p className="mx-auto mt-2 max-w-sm text-muted">{onlySaved ? 'Tap the heart on any game or tournament to keep it here. Then add the whole wishlist to your calendar in one go.' : 'Try fewer words, another month, or clear the filters. The calendar holds what is out lately or coming: older games are in Browse.'}</p>
+              <div className="mt-7 flex flex-wrap justify-center gap-3">
+                <button type="button" className="btn btn-mark" onClick={reset}>{onlySaved ? 'Browse the calendar' : 'Clear filters'}</button>
+                {!onlySaved && !!parsed.text.trim() && <Link href={browseHref({ q: parsed.text.trim().slice(0, 60) })} className="btn btn-line">Search every game for “{parsed.text.trim().slice(0, 30)}”</Link>}
+              </div>
             </div>
           )}
         </>
@@ -491,9 +486,11 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
   }, [local, found])
   useEffect(() => setActive(-1), [value])
   const open = (e: Ev) => (e.slug ? router.push(href(e)) : e.url && window.open(e.url, '_blank', 'noopener'))
+  const name = text.trim().slice(0, 60), rows = hits.length + (name.length >= 2 ? 1 : 0) // the last row, when there is a name to look for, goes on to Browse: every game, not only these few
+  const browseAll = () => router.push(browseHref({ q: name }))
   const onKey = (ev: KeyboardEvent<HTMLInputElement>) => {
-    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); setActive((a) => Math.max(-1, Math.min(hits.length - 1, a + (ev.key === 'ArrowDown' ? 1 : -1)))) }
-    else if (ev.key === 'Enter' && hits[active]) open(hits[active])
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); setActive((a) => Math.max(-1, Math.min(rows - 1, a + (ev.key === 'ArrowDown' ? 1 : -1)))) }
+    else if (ev.key === 'Enter' && active >= 0) { if (hits[active]) open(hits[active]); else if (active < rows) browseAll() }
     else if (ev.key === 'Escape') { if (value) onChange(''); else ev.currentTarget.blur() }
   }
   const expanded = focus && hits.length > 0
@@ -503,7 +500,7 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
       <div className="relative">
         <Icon name="search" className="pointer-events-none absolute top-1/2 left-5 h-5 w-5 -translate-y-1/2 text-muted" />
         <input id="search-input" value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onFocus={() => setFocus(true)} onBlur={() => setTimeout(() => setFocus(false), 120)}
-          role="combobox" aria-expanded={expanded} aria-controls="search-results" aria-autocomplete="list" aria-activedescendant={expanded && active >= 0 ? `hit-${hits[active].id}` : undefined}
+          role="combobox" aria-expanded={expanded} aria-controls="search-results" aria-autocomplete="list" aria-activedescendant={expanded && active >= 0 ? (hits[active] ? `hit-${hits[active].id}` : 'hit-browse') : undefined}
           aria-label="Search games and tournaments" autoComplete="off" spellCheck={false} enterKeyHint="search" placeholder="Search games, platforms or dates"
           className={`h-14 w-full rounded-full bg-panel pl-14 text-base text-fg ring-1 ring-line/12 transition outline-none ring-inset placeholder:text-dim hover:ring-line/25 focus:ring-2 focus:ring-mark sm:h-16 sm:text-[17px] ${value ? 'pr-24' : 'pr-5 sm:pr-14'}`} />
         <div className="absolute top-1/2 right-3 -translate-y-1/2">
@@ -522,6 +519,14 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
                 <span className={`shrink-0 text-[13px] font-semibold ${e.kind === 'tournament' ? 'text-arena' : 'text-muted'}`}>{e.kind === 'tournament' ? 'Esports' : 'Game'}</span>
               </li>
             ))}
+            {rows > hits.length && (
+              <li id="hit-browse" role="option" aria-selected={active === hits.length} onMouseDown={(ev) => { ev.preventDefault(); browseAll() }} onMouseEnter={() => setActive(hits.length)}
+                className={`flex cursor-pointer items-center gap-3 rounded-[14px] px-2.5 py-2.5 ${active === hits.length ? 'bg-raised' : ''}`}>
+                <span className="grid h-10 w-16 shrink-0 place-items-center rounded-[6px] bg-raised text-muted"><Icon name="search" className="h-4 w-4" /></span>
+                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">Search every game for “{name.slice(0, 30)}”</span>
+                <Icon name="right" className="h-4 w-4 shrink-0 text-muted" />
+              </li>
+            )}
           </ul>
         )}
       </div>

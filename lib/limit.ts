@@ -19,7 +19,7 @@ export function network(ip: string) {
 }
 
 /** Where the request comes from, for rate limits. On Vercel the platform sets these headers itself; on your own computer there are none. */
-export const clientIp = (req: Request) => network(req.headers.get('x-vercel-forwarded-for')?.split(',')[0] || req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'local')
+export const clientIp = (req: { headers: { get(name: string): string | null } }) => network(req.headers.get('x-vercel-forwarded-for')?.split(',')[0] || req.headers.get('x-forwarded-for')?.split(',')[0] || req.headers.get('x-real-ip') || 'local')
 
 /** The mailbox an address leads to, for counting: a "+tag" is ignored, and so are the dots in a Gmail address. */
 export function mailbox(email: string) {

@@ -41,7 +41,7 @@ export const Code = ({ children, label }: { children: string; label?: string }) 
 )
 
 const COLUMNS: [string, string[][]][] = [
-  ['Calendar', [['This week', '/#week'], ['Most anticipated', '/#upcoming'], ['Esports', '/#esports'], ['Search', '/#explore']]],
+  ['Calendar', [['This week', '/#week'], ['Most anticipated', '/#upcoming'], ['Esports', '/#esports'], ['Search', '/#explore'], ['Browse every game', '/browse']]],
   ['Developers', [['API docs', '/docs'], ['Events endpoint', '/api/events?limit=5'], ['Calendar feed', '/api/calendar.ics'], ['Data freshness', '/docs#freshness']]],
   ['Project', [['Source on GitHub', REPO], ['Terms and privacy', '/legal'], ['CC0 license', 'https://creativecommons.org/publicdomain/zero/1.0/']]],
 ]
