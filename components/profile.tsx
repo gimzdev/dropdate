@@ -4,19 +4,16 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { deleteAccount, drop, notify, seed, setList, signOut, useAccount } from '@/lib/account'
-import { type Ev, type LibItem, type ListName, monthLabel, monthYear, scoreTone, status, webcal } from '@/lib/core'
+import { type Ev, type LibItem, TABS, type TabName, monthLabel, monthYear, status, webcal } from '@/lib/core'
 import { Heart, Icon } from './icons'
-import { Img, Open, TONE, Thumb, useToday } from './ui'
+import { Img, Open, Score, TONE, Thumb, useToday } from './ui'
 
-// The profile: the wishlist and the games you have played, each with its Metacritic score, and your data.
+// The profile: the wishlist and the games you have played, each with its Metacritic score, a tick on a played game to say you completed it, and your data.
 
 const PAGE = 60
 const CELLS = 'grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-x-3 sm:grid-cols-[86px_minmax(0,1fr)_auto] md:grid-cols-[86px_minmax(0,1fr)_88px_92px] md:gap-x-5'
 const round = 'grid h-10 w-10 shrink-0 place-items-center rounded-full text-dim transition hover:bg-raised'
 const platforms = (e: Ev) => e.platforms.map((p) => (p === 'PlayStation' ? 'PS' : p)).join(', ')
-
-/** The score as everywhere else on the site; nothing when there is none. */
-const Score = ({ e }: { e: Ev }) => (e.metacritic ? <span title="Metacritic score" className={`tag text-[13px] ${scoreTone(e.metacritic)}`}>{e.metacritic}</span> : null)
 
 /** Upcoming by date, then undated and "to be announced", then what is already out (newest first). */
 function wishlistOrder(list: Ev[], today: string) {
@@ -24,39 +21,51 @@ function wishlistOrder(list: Ev[], today: string) {
   return [...list].sort((a, b) => rank(a) - rank(b) || (rank(a) === 2 ? b.start.localeCompare(a.start) : (a.start || '9').localeCompare(b.start || '9') || a.title.localeCompare(b.title)))
 }
 
-function Row({ e, list, today }: { e: Ev; list: ListName; today: string }) {
-  const esport = e.kind === 'tournament', out = !esport && !!e.start && e.start <= today
+function Row({ e, list, today, done }: { e: Ev; list: TabName; today: string; done: boolean }) {
+  const esport = e.kind === 'tournament', out = !esport && !!e.start && e.start <= today, played = list === 'played'
   const s = e.start ? status(e, today) : null
   const when = !e.start ? 'No date yet' : e.tba && e.start > today ? `${monthLabel(e.start.slice(0, 7))}, date to be announced` : s!.label
-  const meta = list === 'played' ? [e.start ? e.start.slice(0, 4) : '', platforms(e)].filter(Boolean).join(' · ') : platforms(e) || e.genres[0]
-  const remove = list === 'wishlist' ? 'Remove from your wishlist' : 'Remove from the games you have played'
+  const meta = (played ? [e.start ? e.start.slice(0, 4) : '', platforms(e)] : [platforms(e) || e.genres[0]]).filter(Boolean) // separate items: a narrow row wraps between them, never in the middle of one
+  const remove = played ? 'Remove from the games you have played' : 'Remove from your wishlist'
   return (
     <li className={`${CELLS} py-3.5`}>
       <Open e={e} className="block rounded-art"><Thumb e={e} className="aspect-[16/10] w-full rounded-lg" /></Open>
       <div className="min-w-0">
         <Open e={e} className="block"><h3 className="line-clamp-2 text-[15px] leading-snug font-semibold decoration-line/40 underline-offset-[3px] hover:underline">{e.title}</h3></Open>
         <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] leading-snug">
-          {list === 'wishlist' && <span className={`font-semibold ${s?.tone === 'live' && esport ? 'text-live' : TONE[s?.tone ?? 'future']}`}>{when}</span>}
-          {meta && <span className="text-muted">{meta}</span>}
-          <span className="md:hidden"><Score e={e} /></span>
+          {!played && <span className={`font-semibold ${s?.tone === 'live' && esport ? 'text-live' : TONE[s?.tone ?? 'future']}`}>{when}</span>}
+          {played && done && <span className="inline-flex items-center gap-1 font-semibold text-go"><Icon name="check" className="h-3.5 w-3.5" />Completed</span>}
+          {meta.map((m, i) => <span key={i} className="text-muted">{m}</span>)}
+          {!!e.metacritic && <span className="md:hidden"><Score n={e.metacritic} className="text-[13px]" /></span>}
         </p>
       </div>
-      <span className="hidden justify-center md:flex">{e.metacritic ? <Score e={e} /> : !esport && <span className="text-dim" aria-label="No Metacritic score">—</span>}</span>
+      <span className="hidden justify-center md:flex">{e.metacritic ? <Score n={e.metacritic} className="text-[13px]" /> : !esport && <><span aria-hidden className="text-dim">—</span><span className="sr-only">No Metacritic score</span></>}</span>
       <div className="flex items-center justify-end">
-        {list === 'wishlist' && out && (
+        {!played && out && (
           <button type="button" title="I have played this" aria-label={`Mark ${e.title} as played`} className={`${round} hover:text-go`}
             onClick={async () => { if (await setList('played', e.id, true)) notify(`${e.title} moved to the games you have played.`) }}><Icon name="pad" /></button>
         )}
-        <button type="button" title={remove} aria-label={`${remove}: ${e.title}`} className={`${round} hover:text-fg`} onClick={() => void setList(list, e.id, false)}><Icon name="close" /></button>
+        {played && !esport && (
+          <button type="button" aria-pressed={done} title={done ? 'Completed. Tap to undo' : 'Mark as completed'} aria-label={`Completed: ${e.title}`}
+            className={done ? 'grid h-10 w-10 shrink-0 place-items-center rounded-full bg-go/15 text-go ring-1 ring-go/40 transition ring-inset hover:bg-go/25' : `${round} hover:text-go`}
+            onClick={() => void setList('completed', e.id, !done)}><Icon name={done ? 'check' : 'flag'} /></button>
+        )}
+        <button type="button" title={remove} aria-label={`${remove}: ${e.title}`} className={`${round} hover:text-fg`} onClick={() => void setList(played ? 'played' : 'wishlist', e.id, false)}><Icon name="close" /></button>
       </div>
     </li>
   )
 }
 
+/** What the search box and its button say, for each list. */
+const ADD: Record<TabName, { label: string; placeholder: string; button: string }> = {
+  wishlist: { label: 'Search for a game to put on your wishlist', placeholder: 'Search a game to wishlist', button: 'Wishlist' },
+  played: { label: 'Search for a game you have played', placeholder: 'Search a game you played', button: 'Played' },
+}
+
 interface Found { key: string; slug: string; title: string; released?: string; thumb: string; metacritic?: number }
 
 /** Search every game and put one on a list: the way to add what the calendar does not hold (older games, mostly). */
-function AddGame({ list, today, has, onAdded }: { list: ListName; today: string; has: (key: string) => boolean; onAdded: (e: Ev) => void }) {
+function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; has: (key: string) => boolean; onAdded: (e: Ev) => void }) {
   const [q, setQ] = useState(''), [found, setFound] = useState<Found[] | null>(null), [failed, setFailed] = useState(false), [adding, setAdding] = useState('')
   useEffect(() => {
     const term = q.trim()
@@ -83,11 +92,11 @@ function AddGame({ list, today, has, onAdded }: { list: ListName; today: string;
   const term = q.trim()
   return (
     <div className="mt-8">
-      <label htmlFor="add-game" className="sr-only">{list === 'wishlist' ? 'Search for a game to put on your wishlist' : 'Search for a game you have played'}</label>
+      <label htmlFor="add-game" className="sr-only">{ADD[list].label}</label>
       <div className="relative">
         <Icon name="search" className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-dim" />
         <input id="add-game" type="search" autoComplete="off" spellCheck={false} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') setQ('') }}
-          placeholder={list === 'wishlist' ? 'Search a game to add to your wishlist' : 'Search a game you have played'}
+          placeholder={ADD[list].placeholder}
           className="h-12 w-full rounded-full bg-panel pr-4 pl-11 text-[16px] ring-1 ring-line/12 ring-inset transition placeholder:text-dim" />
       </div>
       <div aria-live="polite">
@@ -96,17 +105,17 @@ function AddGame({ list, today, has, onAdded }: { list: ListName; today: string;
         {found && found.length > 0 && (
           <ul className="mt-3 divide-y divide-line/10 overflow-hidden rounded-2xl bg-panel ring-1 ring-line/10 ring-inset">
             {found.map((f) => {
-              const here = has(f.key), unreleased = list === 'played' && (!f.released || f.released > today)
+              const here = has(f.key), unreleased = list !== 'wishlist' && (!f.released || f.released > today)
               return (
                 <li key={f.key} className="flex items-center gap-3 px-3 py-2.5 sm:px-4">
                   {f.thumb ? <Img src={f.thumb} className="aspect-[16/10] w-16 rounded-md" /> : <span className="block aspect-[16/10] w-16 shrink-0 rounded-md bg-raised" />}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[15px] font-semibold">{f.title}</p>
-                    <p className="mt-0.5 flex items-center gap-2 text-[13px] text-muted">{f.released ? f.released.slice(0, 4) : 'Not announced'}{!!f.metacritic && <span className={`tag ${scoreTone(f.metacritic)}`}>{f.metacritic}</span>}</p>
+                    <p className="mt-0.5 flex items-center gap-2 text-[13px] text-muted">{f.released ? f.released.slice(0, 4) : 'Not announced'}{!!f.metacritic && <Score n={f.metacritic} />}</p>
                   </div>
                   {here ? <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-go"><Icon name="check" />Added</span>
                     : unreleased ? <span className="shrink-0 text-sm text-dim">Not out yet</span>
-                      : <button type="button" disabled={adding === f.key} onClick={() => void add(f)} className="btn btn-line btn-sm shrink-0">{adding === f.key ? 'Adding…' : list === 'wishlist' ? 'Wishlist' : 'Played'}</button>}
+                      : <button type="button" disabled={adding === f.key} onClick={() => void add(f)} aria-label={`${ADD[list].button}: ${f.title}`} className="btn btn-line btn-sm shrink-0">{adding === f.key ? 'Adding…' : ADD[list].button}</button>}
                 </li>
               )
             })}
@@ -140,7 +149,7 @@ function DeleteAccount() {
   return (
     <div role="group" aria-labelledby="delete-title" className="mt-8 max-w-xl rounded-panel bg-live/10 p-5 ring-1 ring-live/30 ring-inset md:p-6">
       <h3 id="delete-title" className="text-lg font-semibold">Delete your account?</h3>
-      <p className="mt-2 text-[15px] text-[#ffd0d4]">This erases your email address, your wishlist and the games you have played, for good. It cannot be undone and we cannot bring it back. Download your data first if you want a copy.</p>
+      <p className="mt-2 text-[15px] text-[#ffd0d4]">This erases your email address, your wishlist and the games you have played, with the ones you completed, for good. It cannot be undone and we cannot bring it back. Download your data first if you want a copy.</p>
       {failed && <p role="alert" className="mt-3 text-[15px] font-semibold text-[#ffb7be]">Could not delete the account. Check your connection and try again.</p>}
       <div className="mt-5 flex flex-wrap gap-3">
         <button type="button" disabled={step === 'busy'} onClick={async () => { setStep('busy'); setFailed(false); if (!(await deleteAccount())) { setFailed(true); setStep('ask') } }} className="btn bg-live text-black hover:bg-[#ff6e7e]">{step === 'busy' ? 'Deleting…' : 'Delete everything'}</button>
@@ -152,17 +161,17 @@ function DeleteAccount() {
 
 export function Profile({ user, items, today: serverToday }: { user: { email: string; since: string }; items: LibItem[]; today: string }) {
   const router = useRouter(), params = useSearchParams(), today = useToday(serverToday), account = useAccount()
-  const wanted: ListName = params.get('tab') === 'played' ? 'played' : 'wishlist'
-  const [tab, setTab] = useState<ListName>(wanted), [limit, setLimit] = useState(PAGE), [added, setAdded] = useState<Ev[]>([]), [origin, setOrigin] = useState(''), [copied, setCopied] = useState(false)
+  const wanted: TabName = TABS.find((l) => l === params.get('tab')) ?? 'wishlist'
+  const [tab, setTab] = useState<TabName>(wanted), [limit, setLimit] = useState(PAGE), [added, setAdded] = useState<Ev[]>([]), [origin, setOrigin] = useState(''), [copied, setCopied] = useState(false)
   useEffect(() => setTab(wanted), [wanted])
   useEffect(() => setOrigin(location.origin), [])
 
   // What the server rendered, newest first; the account store takes over once it has this (seed), and then follows every change on the page
   const first = useMemo(() => {
-    const keys = (f: 'wishlisted' | 'played') => items.filter((i) => i[f]).sort((a, b) => b[f]!.localeCompare(a[f]!)).map((i) => i.ev.id)
-    return { wishlist: keys('wishlisted'), played: keys('played') }
+    const keys = (f: 'wishlisted' | 'played' | 'completed') => items.filter((i) => i[f]).sort((a, b) => b[f]!.localeCompare(a[f]!)).map((i) => i.ev.id)
+    return { wishlist: keys('wishlisted'), played: keys('played'), completed: keys('completed') }
   }, [items])
-  useEffect(() => seed({ email: user.email, since: user.since, wishlist: first.wishlist, played: first.played }), [first, user.email, user.since])
+  useEffect(() => seed({ email: user.email, since: user.since, ...first }), [first, user.email, user.since])
 
   const keys = account.phase === 'in' ? account : first
   const known = useMemo(() => new Map([...items.map((i) => i.ev), ...added].map((e) => [e.id, e])), [items, added])
@@ -173,18 +182,20 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
     const list = keys[tab].flatMap((k) => known.get(k) ?? [])
     return tab === 'wishlist' ? wishlistOrder(list, today) : list
   }, [keys, tab, known, today])
-  const counts = { wishlist: keys.wishlist.length, played: keys.played.length }
+  const counts = { wishlist: keys.wishlist.length, played: keys.played.length, completed: keys.completed.length }
+  const finished = useMemo(() => new Set(keys.completed), [keys.completed])
 
-  const pick = (t: ListName) => { setTab(t); setLimit(PAGE); history.replaceState(null, '', t === 'played' ? '/profile?tab=played' : '/profile') }
+  const pick = (t: TabName) => { setTab(t); setLimit(PAGE); history.replaceState(null, '', t === 'wishlist' ? '/profile' : `/profile?tab=${t}`) }
   const feed = origin && keys.wishlist.length ? `${origin}/api/calendar.ics?ids=${keys.wishlist.slice(0, 300).join(',')}` : ''
   const copy = async () => {
     try { await navigator.clipboard.writeText(feed) } catch { return prompt('Calendar feed link', feed) as unknown as void }
     setCopied(true)
     setTimeout(() => setCopied(false), 2200)
   }
-  const empty = tab === 'wishlist'
-    ? ['Your wishlist is empty', 'Tap the heart on any game or tournament to keep it here, or search for a game above.']
-    : ['No games marked as played yet', 'Open a game and press “Mark as played”, or search for the ones you have finished above.']
+  const empty = {
+    wishlist: ['Your wishlist is empty', 'Tap the heart on any game or tournament to keep it here, or search for a game above.'],
+    played: ['No games marked as played yet', 'Open a game and press “Played”, or search for the ones you have played above.'],
+  }[tab]
 
   if (account.phase === 'out') {
     return (
@@ -207,14 +218,17 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
 
       <AddGame key={tab} list={tab} today={today} has={(k) => keys[tab].includes(k)} onAdded={(e) => setAdded((a) => [...a, e])} />
 
-      <section aria-label={tab === 'wishlist' ? 'Your wishlist' : 'Games you have played'} className="mt-10">
+      <section aria-label={{ wishlist: 'Your wishlist', played: 'Games you have played' }[tab]} className="mt-10">
         {rows.length > 0 ? (
           <>
+            {tab === 'played' && (counts.completed
+              ? <p className="mb-4 text-[14px] text-dim">{counts.completed} of {counts.played} completed</p>
+              : <p className="mb-4 text-[14px] text-dim">Finished one? Tap the <Icon name="flag" className="inline h-3.5 w-3.5 align-[-2px]" /><span className="sr-only"> flag</span> on its row to mark it completed.</p>)}
             <div className={`${CELLS} hidden border-b border-line/10 pb-2.5 text-[13px] font-medium text-dim md:grid`}>
               <span className="col-span-2">Game</span><span className="text-center">Metacritic</span><span />
             </div>
             <ul className="divide-y divide-line/10">
-              {rows.slice(0, limit).map((e) => <Row key={`${tab}-${e.id}`} e={e} list={tab} today={today} />)}
+              {rows.slice(0, limit).map((e) => <Row key={`${tab}-${e.id}`} e={e} list={tab} today={today} done={finished.has(e.id)} />)}
             </ul>
             {rows.length > limit && <div className="mt-8 text-center"><button type="button" onClick={() => setLimit((l) => l + PAGE * 2)} className="btn btn-line px-7">Show more<span className="text-muted">{rows.length - limit} left</span></button></div>}
           </>
@@ -248,7 +262,7 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
       <section id="data" aria-labelledby="data-title" className="mt-20 border-t border-line/10 pt-12">
         <h2 id="data-title" className="display text-[2.1rem] md:text-[2.5rem]">Your data</h2>
         <p className="prose-dd mt-4 max-w-2xl">
-          Dropdate keeps your email address, the two lists above with the day you added each game, and the dates you were signed in. No name, no photo, no IP address, no device details.
+          Dropdate keeps your email address, your wishlist and played games with the date and time you added each one (and when you completed it), and the dates you were signed in. No name, no photo, no IP address, no device details.
           You can take it all with you or erase it at any time. <Link href="/legal#privacy">Read how your data is handled</Link>.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">

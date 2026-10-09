@@ -93,13 +93,28 @@ export const googleUrl = (e: Pick<Ev, 'title' | 'start' | 'end' | 'slug' | 'url'
 
 /** Whether this build has accounts: the generator sets it when a database is configured. Without one the site works as before, with the list kept in the browser. */
 export const ACCOUNTS = process.env.NEXT_PUBLIC_ACCOUNTS === '1'
-export type ListName = 'wishlist' | 'played'
+/** What a person can mark on a game: put it on the wishlist, mark it played, mark it completed. Completed is not a list of its own: it is a mark on a played game. */
+export const LISTS = ['wishlist', 'played', 'completed'] as const
+export type ListName = (typeof LISTS)[number]
+/** The two lists the profile shows: what is coming, and what has been played (completed or not). */
+export const TABS = ['wishlist', 'played'] as const
+export type TabName = (typeof TABS)[number]
 /** How the calendar names a game or tournament: rawg-123, steam-456, ps-789. */
 export const GAME_KEY = /^(?:rawg|steam|ps)-\d{1,12}$/
-/** What someone has marked: both flags can be set (played, and wishlisted again to replay). */
-export interface Flags { wishlist: boolean; played: boolean }
-/** A game in someone's library: its public details, and when they wishlisted it or marked it played. */
-export interface LibItem { ev: Ev; wishlisted?: string; played?: string }
+/** What someone has marked: a played game can also be wishlisted again to replay it, and a completed game is always played. */
+export interface Flags { wishlist: boolean; played: boolean; completed: boolean }
+/** A game in someone's library: its public details, and when they wishlisted it, marked it played and marked it completed. */
+export interface LibItem { ev: Ev; wishlisted?: string; played?: string; completed?: string }
+/**
+ * What a change does to a game's flags, by the rules the server applies (the browser shows it at once, then takes the server's answer).
+ * Marking a game played or completed takes it off the wishlist (it is done); completing it marks it played too;
+ * un-marking it as played also un-completes it; un-completing keeps it played.
+ */
+export function afterChange(f: Flags, list: ListName, on: boolean): Flags {
+  if (list === 'wishlist') return { ...f, wishlist: on }
+  if (list === 'played') return on ? { wishlist: false, played: true, completed: f.completed } : { wishlist: f.wishlist, played: false, completed: false }
+  return on ? { wishlist: false, played: true, completed: true } : { ...f, completed: false }
+}
 /**
  * A same-site path to return to after signing in. Anything else (another site, //host, backslashes, the sign-in page itself) falls back.
  * No control characters, spaces or non-ASCII either: browsers drop tabs and newlines inside an address, so "/<tab>/evil.example" would mean "//evil.example".

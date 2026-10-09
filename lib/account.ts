@@ -2,7 +2,7 @@
 // A module rather than a React context: hearts sit all over the site, and each one reads and changes the same state.
 // Browser only. A visitor who never signed in never makes a request here: the "signed in" marker below is what says to ask.
 import { useEffect, useSyncExternalStore } from 'react'
-import { ACCOUNTS, type Ev, type Flags, type ListName } from './core'
+import { ACCOUNTS, type Ev, type Flags, type ListName, afterChange } from './core'
 
 // ── Storage (it can be blocked or full: nothing here may throw) ─────────
 
@@ -57,8 +57,8 @@ export function useNotice() {
 // ── The account ─────────────────────────────────────────────────────────
 
 /** idle: not asked yet (the server render, and the first paint). loading: signed in before, asking again. out and in: answered. */
-export interface Account { phase: 'idle' | 'loading' | 'out' | 'in'; email: string; since: string; wishlist: string[]; played: string[] }
-const IDLE: Account = { phase: 'idle', email: '', since: '', wishlist: [], played: [] }
+export interface Account { phase: 'idle' | 'loading' | 'out' | 'in'; email: string; since: string; wishlist: string[]; played: string[]; completed: string[] }
+const IDLE: Account = { phase: 'idle', email: '', since: '', wishlist: [], played: [], completed: [] }
 const OUT: Account = { ...IDLE, phase: 'out' }
 let state = IDLE
 const put = (next: Partial<Account>) => { state = { ...state, ...next }; emit() }
@@ -77,9 +77,9 @@ async function load() {
     const res = await fetch('/api/me', { cache: 'no-store' })
     if (res.status === 401) { drop(res); setSession(false); return put({ ...OUT }) }
     if (!res.ok) { drop(res); throw new Error(String(res.status)) }
-    const me = (await res.json()) as { email: string; since: string; wishlist: string[]; played: string[] }
+    const me = (await res.json()) as { email: string; since: string; wishlist: string[]; played: string[]; completed?: string[] }
     settled.clear()
-    put({ phase: 'in', email: me.email, since: me.since, wishlist: me.wishlist, played: me.played })
+    put({ phase: 'in', email: me.email, since: me.since, wishlist: me.wishlist, played: me.played, completed: me.completed ?? [] })
     await mergeSaved()
   } catch {
     if (state.phase === 'loading') put({ ...OUT }) // unreachable right now: behave as signed out, and ask again on the next page
@@ -95,8 +95,9 @@ export function start() {
 }
 
 /** The profile page already knows who is signed in (the server just checked): no need to wait for the answer. */
-export function seed(me: { email: string; since: string; wishlist: string[]; played: string[] }) {
+export function seed(me: { email: string; since: string; wishlist: string[]; played: string[]; completed: string[] }) {
   setSession(true)
+  settled.clear() // what the server last said is now this
   put({ phase: 'in', ...me })
 }
 
@@ -106,9 +107,9 @@ export function useAccount(): Account {
   return account
 }
 
-const flagsOf = (key: string): Flags => ({ wishlist: state.wishlist.includes(key), played: state.played.includes(key) })
+const flagsOf = (key: string): Flags => ({ wishlist: state.wishlist.includes(key), played: state.played.includes(key), completed: state.completed.includes(key) })
 const place = (list: string[], key: string, on: boolean) => (on ? (list.includes(key) ? list : [key, ...list]) : list.filter((k) => k !== key))
-const apply = (key: string, f: Flags) => put({ wishlist: place(state.wishlist, key, f.wishlist), played: place(state.played, key, f.played) })
+const apply = (key: string, f: Flags) => put({ wishlist: place(state.wishlist, key, f.wishlist), played: place(state.played, key, f.played), completed: place(state.completed, key, f.completed) })
 
 /** Whether someone is signed in at this moment (read when asked, not when the page last rendered). */
 export const signedInNow = () => state.phase === 'in'
@@ -128,7 +129,7 @@ function inOrder<T>(key: string, job: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Wishlists or marks a game as played (or undoes it). It shows at once, then saves; if saving fails it goes back and says why.
+ * Wishlists a game, marks it as played or as completed (or undoes it). It shows at once, then saves; if saving fails it goes back and says why.
  * Returns the flags as saved (and the game's details when it was added), or null when it did not happen.
  */
 export interface Saved { flags: Flags; ev?: Ev }
@@ -138,7 +139,7 @@ export async function setList(list: ListName, key: string, on: boolean): Promise
   const before = flagsOf(key), n = (latest.get(key) ?? 0) + 1
   if (!settled.has(key)) settled.set(key, before)
   latest.set(key, n)
-  apply(key, list === 'wishlist' ? { ...before, wishlist: on } : { wishlist: on ? false : before.wishlist, played: on }) // marking played takes it off the wishlist, as the server will
+  apply(key, afterChange(before, list, on)) // by the same rules as the server
   return inOrder(key, async () => {
     if (state.phase !== 'in') return null // signed out while this was waiting its turn
     let message = 'Could not save that. Check your connection and try again.'
@@ -219,10 +220,10 @@ async function mergeSaved() {
   try {
     const res = await fetch('/api/library/merge', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ keys }) })
     if (!res.ok) return drop(res)
-    const j = (await res.json()) as { added: number; done: string[]; wishlist: string[]; played: string[] }
+    const j = (await res.json()) as { added: number; done: string[]; wishlist: string[]; played: string[]; completed?: string[] }
     forgetSaved(j.done)
     settled.clear()
-    put({ wishlist: j.wishlist, played: j.played })
+    put({ wishlist: j.wishlist, played: j.played, completed: j.completed ?? state.completed })
     const left = readSaved().length
     if (j.added) notify(`Added ${j.added} ${j.added === 1 ? 'game' : 'games'} you saved on this device to your wishlist.${left ? ` ${left} could not be added yet and will be tried again.` : ''}`)
   } catch {}

@@ -3,9 +3,9 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type KeyboardEvent, type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { type Ev, type Kind, type Payload, type Platform, PLATFORMS, gap, googleUrl, href, iso, longDate, monthLabel, monthShort, range, scoreTone, shift, srcSet, status, toDate, webcal, weekday } from '@/lib/core'
+import { type Ev, type Kind, type Payload, type Platform, PLATFORMS, gap, googleUrl, href, iso, longDate, monthLabel, monthShort, range, shift, srcSet, status, toDate, webcal, weekday } from '@/lib/core'
 import { type Chip, removeChip, search } from '@/lib/search'
-import { BigDate, Card, Circled, Countdown, DateBlock, EXPLORE_EVENT, type ExploreIntent, Heart, Icon, Img, Open, SaveButton, Section, Thumb, Updated, fallback, useExplore, useSaved, useSwipe, useToday } from './ui'
+import { BigDate, Card, Circled, Countdown, DateBlock, EXPLORE_EVENT, type ExploreIntent, Heart, Icon, Img, Open, SaveButton, Score, Section, Thumb, Updated, fallback, useExplore, useSaved, useSwipe, useToday } from './ui'
 
 // The home page: the biggest upcoming releases one at a time, the week ahead as a wall calendar, the most
 // anticipated games, the month's biggest launches, the esports schedule and the searchable calendar.
@@ -229,7 +229,7 @@ export function Fresh({ items, today: serverToday }: { items: Ev[]; today: strin
                     <span className="truncate text-muted">{e.genres.slice(0, 2).join(', ')}</span>
                   </span>
                 </span>
-                {!!e.metacritic && <span title="Metacritic score" className={`tag text-[13px] ${scoreTone(e.metacritic)}`}>{e.metacritic}</span>}
+                {!!e.metacritic && <Score n={e.metacritic} className="text-[13px]" />}
               </Open>
               <SaveButton id={e.id} title={e.title} variant="plain" />
             </li>

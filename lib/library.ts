@@ -1,4 +1,4 @@
-// Everyone's library, server side only: what each person wishlisted or played, and the shared cache of those games'
+// Everyone's library, server side only: what each person wishlisted, played or completed, and the shared cache of those games'
 // public details (dd_game) that lets a library open without calling the data sources for every game.
 import 'server-only'
 import { after } from 'next/server'
@@ -121,32 +121,46 @@ async function refresh(keys: string[]): Promise<Map<string, Ev>> {
 
 /** Just the keys, newest first: what the buttons all over the site need to know. */
 export async function libraryKeys(userId: string) {
-  const rows = await q<{ game_key: string; w: Date | null; p: Date | null }>('select game_key, wishlisted_at as w, played_at as p from dd_library where user_id = $1', [userId])
-  const by = (f: 'w' | 'p') => rows.filter((r) => r[f]).sort((a, b) => +b[f]! - +a[f]!).map((r) => r.game_key)
-  return { wishlist: by('w'), played: by('p') }
+  const rows = await q<{ game_key: string; w: Date | null; p: Date | null; c: Date | null }>(
+    'select game_key, wishlisted_at as w, played_at as p, completed_at as c from dd_library where user_id = $1', [userId])
+  const by = (f: 'w' | 'p' | 'c') => rows.filter((r) => r[f]).sort((a, b) => +b[f]! - +a[f]!).map((r) => r.game_key)
+  return { wishlist: by('w'), played: by('p'), completed: by('c') }
 }
 
 /** The whole library with each game's details, for the profile page. */
 export async function library(userId: string): Promise<LibItem[]> {
-  const rows = await q<GameRow & { w: Date | null; p: Date | null; stale: boolean }>(
-    `select ${GAME}, l.wishlisted_at as w, l.played_at as p, (${STALE}) as stale
+  const rows = await q<GameRow & { w: Date | null; p: Date | null; c: Date | null; stale: boolean }>(
+    `select ${GAME}, l.wishlisted_at as w, l.played_at as p, l.completed_at as c, (${STALE}) as stale
      from dd_library l join dd_game g on g.key = l.game_key where l.user_id = $1`, [userId])
   const fresh = await refresh(rows.filter((r) => r.stale).map((r) => r.key)).catch(() => new Map<string, Ev>())
-  return rows.map((r) => ({ ev: fresh.get(r.key) ?? toEv(r), ...(r.w && { wishlisted: r.w.toISOString() }), ...(r.p && { played: r.p.toISOString() }) }))
+  return rows.map((r) => ({ ev: fresh.get(r.key) ?? toEv(r), ...(r.w && { wishlisted: r.w.toISOString() }), ...(r.p && { played: r.p.toISOString() }), ...(r.c && { completed: r.c.toISOString() }) }))
 }
 
 // ── Changing ────────────────────────────────────────────────────────────
 
-const COL = { wishlist: 'wishlisted_at', played: 'played_at' } as const
-const OTHER = { wishlist: 'played_at', played: 'wishlisted_at' } as const
+// What turning a list on does to the row, as the values of a new row and as the update of an existing one. A new row needs at least one date.
+// Played and completed take the game off the wishlist (it is done); completed also marks it played, so the two dates never disagree.
+const ON = {
+  wishlist: { values: 'now(), null::timestamptz, null::timestamptz', update: 'wishlisted_at = coalesce(dd_library.wishlisted_at, now())' },
+  played: { values: 'null::timestamptz, now(), null::timestamptz', update: 'played_at = coalesce(dd_library.played_at, now()), wishlisted_at = null' },
+  completed: { values: 'null::timestamptz, now(), now()', update: 'played_at = coalesce(dd_library.played_at, now()), completed_at = coalesce(dd_library.completed_at, now()), wishlisted_at = null' },
+} as const
+// What turning a list off does. A row with no wishlist date and no played date does not exist: whatever is left of it goes.
+// Un-playing also un-completes; un-completing leaves the game played.
+const OFF = {
+  wishlist: ['update dd_library set wishlisted_at = null where user_id = $1 and game_key = $2 and played_at is not null', 'delete from dd_library where user_id = $1 and game_key = $2 and played_at is null'],
+  played: ['update dd_library set played_at = null, completed_at = null where user_id = $1 and game_key = $2 and wishlisted_at is not null', 'delete from dd_library where user_id = $1 and game_key = $2 and wishlisted_at is null'],
+  completed: ['update dd_library set completed_at = null where user_id = $1 and game_key = $2'],
+} as const
+const FLAGS = 'wishlisted_at is not null as wishlist, played_at is not null as played, completed_at is not null as completed'
 
 /**
- * Wishlists or un-wishlists, marks or un-marks as played. Marking a game played takes it off the wishlist (it is done);
- * wishlisting a played game keeps both. A row with neither flag does not exist. Returns the flags as stored.
+ * Wishlists or un-wishlists, marks or un-marks as played, marks or un-marks as completed (see ON and OFF for exactly what each does).
+ * Wishlisting a played game keeps both. Only games can be played or completed, not tournaments. Returns the flags as stored.
  */
 export async function setFlag(userId: string, key: string, list: ListName, on: boolean): Promise<{ flags: Flags; ev?: Ev }> {
   if (!GAME_KEY.test(key)) throw new LibraryError(400, 'That is not a game.')
-  if (list === 'played' && key.startsWith('ps-')) throw new LibraryError(400, 'Only games can be marked as played.')
+  if (list !== 'wishlist' && key.startsWith('ps-')) throw new LibraryError(400, 'Only games can be marked as played or completed.')
   let ev: Ev | null = null
   if (on) {
     try { ev = await ensureGame(userId, key) } catch (e) {
@@ -155,21 +169,19 @@ export async function setFlag(userId: string, key: string, list: ListName, on: b
     }
     if (!ev) throw new LibraryError(404, 'We could not find that game.')
   }
-  const col = COL[list], other = OTHER[list]
   const change = () => tx(async (c) => {
     if (on) {
       const { rows } = await c.query<Flags>(
-        `insert into dd_library (user_id, game_key, ${col})
-         select $1, $2, now() where (select count(*) from dd_library where user_id = $1) < $3 or exists (select 1 from dd_library where user_id = $1 and game_key = $2)
-         on conflict (user_id, game_key) do update set ${col} = coalesce(dd_library.${col}, now())${list === 'played' ? ', wishlisted_at = null' : ''}
-         returning wishlisted_at is not null as wishlist, played_at is not null as played`, [userId, key, LIMIT])
+        `insert into dd_library (user_id, game_key, wishlisted_at, played_at, completed_at)
+         select $1, $2, ${ON[list].values} where (select count(*) from dd_library where user_id = $1) < $3 or exists (select 1 from dd_library where user_id = $1 and game_key = $2)
+         on conflict (user_id, game_key) do update set ${ON[list].update}
+         returning ${FLAGS}`, [userId, key, LIMIT])
       if (!rows[0]) throw new LibraryError(409, `Your library is full (${LIMIT} games). Remove some to add more.`)
       return rows[0]
     }
-    await c.query(`update dd_library set ${col} = null where user_id = $1 and game_key = $2 and ${other} is not null`, [userId, key])
-    await c.query(`delete from dd_library where user_id = $1 and game_key = $2 and ${other} is null`, [userId, key])
-    const { rows } = await c.query<Flags>('select wishlisted_at is not null as wishlist, played_at is not null as played from dd_library where user_id = $1 and game_key = $2', [userId, key])
-    return rows[0] ?? { wishlist: false, played: false }
+    for (const sql of OFF[list]) await c.query(sql, [userId, key])
+    const { rows } = await c.query<Flags>(`select ${FLAGS} from dd_library where user_id = $1 and game_key = $2`, [userId, key])
+    return rows[0] ?? { wishlist: false, played: false, completed: false }
   })
   let flags: Flags
   try { flags = await change() } catch (e) {
@@ -221,15 +233,15 @@ export async function exportData(user: { id: string; email: string; since: strin
   const [accounts, sessions, rows, [who]] = await Promise.all([
     q<{ providerId: string; accountId: string; createdAt: Date }>('select "providerId", "accountId", "createdAt" from "account" where "userId" = $1 order by "createdAt"', [user.id]),
     q<{ createdAt: Date; updatedAt: Date; expiresAt: Date }>('select "createdAt", "updatedAt", "expiresAt" from "session" where "userId" = $1 order by "createdAt"', [user.id]),
-    q<GameRow & { w: Date | null; p: Date | null }>(
-      `select ${GAME}, l.wishlisted_at as w, l.played_at as p from dd_library l join dd_game g on g.key = l.game_key where l.user_id = $1`, [user.id]),
+    q<GameRow & { w: Date | null; p: Date | null; c: Date | null }>(
+      `select ${GAME}, l.wishlisted_at as w, l.played_at as p, l.completed_at as c from dd_library l join dd_game g on g.key = l.game_key where l.user_id = $1`, [user.id]),
     q<{ updatedAt: Date }>('select "updatedAt" from "user" where "id" = $1', [user.id]),
   ])
   const providers = accounts.filter((a) => a.providerId !== 'credential')
   const entry = (r: GameRow, at: Date) => ({ id: r.key, title: r.title, type: r.kind, releaseDate: r.starts_on, metacritic: r.metacritic, addedAt: at.toISOString() })
-  const list = (f: 'w' | 'p') => rows.filter((r) => r[f]).sort((a, b) => +b[f]! - +a[f]!).map((r) => entry(r, r[f]!))
+  const list = (f: 'w' | 'p') => rows.filter((r) => r[f]).sort((a, b) => +b[f]! - +a[f]!).map((r) => ({ ...entry(r, r[f]!), ...(f === 'p' && { completedAt: r.c?.toISOString() ?? null }) }))
   return {
-    about: 'Everything Dropdate holds about this account: the email address, when the account was made and last used, the sign-in providers linked to it (with the identifier each one gave us), the browsers signed in, and the games you wishlisted or marked as played. Nothing else is kept: no name, photo, IP address or device details. A scrambled sign-in code exists for ten minutes after you ask for one; it is not listed here because it cannot be read back.',
+    about: 'Everything Dropdate holds about this account: the email address, when the account was made and last used, the sign-in providers linked to it (with the identifier each one gave us), the browsers signed in, and the games you wishlisted or marked as played (each with the date and time you did it, and for a played game the date and time you marked it as completed, if you did). Nothing else is kept: no name, photo, IP address or device details. A scrambled sign-in code exists for ten minutes after you ask for one; it is not listed here because it cannot be read back.',
     exportedAt: new Date().toISOString(),
     account: {
       email: user.email, createdAt: user.since, lastUsedAt: who?.updatedAt.toISOString() ?? null,

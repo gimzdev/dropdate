@@ -13,6 +13,7 @@ const PATHS = {
   external: 'M14 5h5v5M19 5l-8 8M17 14v4a1 1 0 01-1 1H6a1 1 0 01-1-1V8a1 1 0 011-1h4',
   copy: 'M9 9h10v10H9zM15 9V5H5v10h4',
   check: 'M5 12.5l4.5 4.5L19 7.5',
+  flag: 'M5.5 21V3.5M5.5 4.5h12.5l-2.8 4.2 2.8 4.3H5.5',
   play: 'M8 5.5v13l10.5-6.5z',
   pause: 'M9 5.5v13M15 5.5v13',
   trophy: 'M8 20h8M12 16v4M7 4h10v4a5 5 0 01-10 0zM17 5h3v1a3 3 0 01-3 3M7 5H4v1a3 3 0 003 3',

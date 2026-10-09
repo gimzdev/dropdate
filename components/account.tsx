@@ -4,9 +4,9 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { dismiss, ready, setList, signOut, signedInNow, useAccount, useNotice } from '@/lib/account'
-import { Heart, Icon } from './icons'
+import { Icon } from './icons'
 
-// What the browser shows of an account: the header control, the Played button and the short messages.
+// What the browser shows of an account: the header control, the Played and Completed buttons of a game, and the short messages.
 
 const signInHref = (path: string) => (path.startsWith('/signin') ? '/signin' : `/signin?next=${encodeURIComponent(path)}`)
 
@@ -48,9 +48,8 @@ export function AccountMenu({ className }: { className: string }) {
       {open && (
         <div id="account-menu" className="absolute top-full right-0 z-50 mt-2 w-64 rounded-2xl bg-panel p-1.5 text-fg shadow-2xl ring-1 ring-line/12 ring-inset">
           <p className="truncate px-3 pt-2 pb-2.5 text-[13px] text-dim" title={account.email}>{account.email}</p>
-          <Link href="/profile" className={item}><Heart on={false} className="h-4 w-4" />Wishlist<span className="ml-auto text-dim">{account.wishlist.length}</span></Link>
-          <Link href="/profile?tab=played" className={item}><Icon name="pad" />Played<span className="ml-auto text-dim">{account.played.length}</span></Link>
-          <Link href="/profile#data" className={item}><Icon name="download" />Your data</Link>
+          <Link href="/profile" onClick={() => setOpen(false)} className={item}><Icon name="pad" />Your games</Link>
+          <Link href="/profile#data" onClick={() => setOpen(false)} className={item}><Icon name="download" />Your data</Link>
           <div className="my-1.5 border-t border-line/10" />
           <button type="button" onClick={() => void signOut()} className={item}><Icon name="logout" />Sign out</button>
         </div>
@@ -60,22 +59,30 @@ export function AccountMenu({ className }: { className: string }) {
 }
 
 /**
- * Marks a game as played, or undoes it. It lives on the game page and in the profile, not on cards, which stay light.
- * Signed out, it sends you to sign in and brings you back here.
+ * Marks a game as played, and as completed once it is, or undoes either. Completed is a mark on a played game, so the two sit together:
+ * Completed on its own marks both, and un-marking Played clears both. They live on the game page, not on cards, which stay light.
+ * Signed out, they send you to sign in and bring you back here.
  */
-export function PlayedButton({ id, title, variant = 'glass' }: { id: string; title: string; variant?: 'glass' | 'line' }) {
+export function Progress({ id, title }: { id: string; title: string }) {
   const account = useAccount(), router = useRouter(), path = usePathname()
-  const on = account.played.includes(id), settled = account.phase === 'out' || account.phase === 'in'
-  const click = async () => {
+  const played = account.played.includes(id), done = account.completed.includes(id), settled = account.phase === 'out' || account.phase === 'in'
+  const click = async (list: 'played' | 'completed', on: boolean) => {
     await ready()
     if (!signedInNow()) return router.push(signInHref(path))
-    void setList('played', id, !on)
+    void setList(list, id, on)
   }
+  const part = (on: boolean) => `btn ${on ? 'bg-go/20 text-go ring-1 ring-go/50 ring-inset hover:bg-go/30' : 'btn-glass'}`
   return (
-    <button type="button" onClick={() => void click()} aria-pressed={on} title={on ? 'You have played this' : 'Add to the games you have played'} aria-label={on ? `${title}: played` : `Mark ${title} as played`}
-      className={`btn ${settled ? '' : 'invisible'} ${on ? 'bg-go/20 text-go ring-1 ring-go/50 ring-inset hover:bg-go/30' : variant === 'glass' ? 'btn-glass' : 'btn-line'}`}>
-      <Icon name={on ? 'check' : 'pad'} />{on ? 'Played' : 'Mark as played'}
-    </button>
+    <div role="group" aria-label="Your progress" className={`inline-flex ${settled ? '' : 'invisible'}`}>
+      <button type="button" onClick={() => void click('played', !played)} aria-pressed={played} title={played ? 'You have played this' : 'Add to the games you have played'} aria-label={`Played: ${title}`}
+        className={`${part(played)} rounded-r-none pr-4`}>
+        <Icon name={played ? 'check' : 'pad'} />Played
+      </button>
+      <button type="button" onClick={() => void click('completed', !done)} aria-pressed={done} title={done ? 'You have completed this' : 'Mark as completed'} aria-label={`Completed: ${title}`}
+        className={`${part(done)} -ml-px rounded-l-none pl-4`}>
+        <Icon name={done ? 'check' : 'flag'} />Completed
+      </button>
+    </div>
   )
 }
 

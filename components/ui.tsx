@@ -126,7 +126,7 @@ export function BigDate({ date, tba, size, unknown, label }: { date: string; tba
   )
 }
 
-/** A heart on artwork, a quiet heart in lists, or a labelled button: the wishlist. It shows in the header count. */
+/** A heart on artwork, a quiet heart in lists, or a labelled button: the wishlist. */
 export function SaveButton({ id, title, label, variant = 'art', needsAccount }: { id: string; title: string; label?: boolean; variant?: 'art' | 'glass' | 'plain'; needsAccount?: boolean }) {
   const { has, toggle, signedIn, phase } = useSaved(), router = useRouter(), path = usePathname()
   const on = has(id), [bump, setBump] = useState(0)
@@ -189,8 +189,20 @@ export function HomeLink({ className, children }: { className?: string; children
 
 const NAV = [['This week', '/#week'], ['Upcoming', '/#upcoming'], ['Esports', '/#esports'], ['Calendar', '/#explore'], ['API', '/docs']]
 
+/** With accounts the wishlist lives in the profile. Without them there is no profile, so it keeps a button here that opens it in the calendar. */
+function WishlistButton({ className, onClick }: { className: string; onClick: () => void }) {
+  const { ids } = useSaved()
+  return (
+    <button type="button" onClick={onClick} aria-label={`Your wishlist, ${ids.length} saved`} className={`${className} relative w-9 px-0 sm:w-auto sm:px-4`}>
+      <span className={ids.length ? 'text-mark' : ''}><Heart on={ids.length > 0} className="h-4 w-4" /></span>
+      <span className="hidden sm:inline">Wishlist</span>
+      {ids.length > 0 && <span className="absolute -top-1.5 -right-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-mark px-1 text-[11px] font-bold text-black sm:static sm:-mr-1.5">{ids.length}</span>}
+    </button>
+  )
+}
+
 export function Header({ overHero = false }: { overHero?: boolean }) {
-  const explore = useExplore(), { ids, signedIn } = useSaved()
+  const explore = useExplore()
   const [scrolled, setScrolled] = useState(false), [open, setOpen] = useState(false)
   useEffect(() => {
     const onScroll = () => setScrolled(scrollY > 12)
@@ -208,14 +220,6 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
   const clear = overHero && !scrolled && !open // see-through over the hero artwork
   const ctl = `btn btn-sm ${clear ? 'btn-glass' : 'btn-line'}`
   const go = (intent: ExploreIntent) => { setOpen(false); explore(intent) }
-  const wishlist = `${ctl} relative w-9 px-0 sm:w-auto sm:px-4`
-  const heart = (
-    <>
-      <span className={ids.length ? 'text-mark' : ''}><Heart on={ids.length > 0} className="h-4 w-4" /></span>
-      <span className="hidden sm:inline">Wishlist</span>
-      {ids.length > 0 && <span className="absolute -top-1.5 -right-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-mark px-1 text-[11px] font-bold text-black sm:static sm:-mr-1.5">{ids.length}</span>}
-    </>
-  )
 
   return (
     <header className={`fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300 ${clear ? 'border-transparent bg-linear-to-b from-black/55 to-transparent bg-origin-border' : 'border-line/10 bg-black/85 backdrop-blur-xl'}`}>
@@ -228,10 +232,7 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
           <button type="button" onClick={() => go({ focus: true })} aria-label="Search games and tournaments" className={`${ctl} w-9 px-0 sm:w-auto sm:px-4`}>
             <Icon name="search" /><span className="hidden sm:inline">Search</span><span className="kbd hidden opacity-70 md:inline-grid">/</span>
           </button>
-          {signedIn
-            ? <Link href="/profile" aria-label={`Your wishlist, ${ids.length} saved`} className={wishlist}>{heart}</Link>
-            : <button type="button" onClick={() => go({ list: true })} aria-label={`Your wishlist, ${ids.length} saved`} className={wishlist}>{heart}</button>}
-          {ACCOUNTS && <AccountMenu className={ctl} />}
+          {ACCOUNTS ? <AccountMenu className={ctl} /> : <WishlistButton className={ctl} onClick={() => go({ list: true })} />}
           <button type="button" onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} aria-controls="site-menu" className={`${ctl} w-9 px-0 lg:hidden`}><Icon name={open ? 'close' : 'menu'} /></button>
         </div>
       </div>
@@ -247,6 +248,11 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
 }
 
 // ── Card ────────────────────────────────────────────────────────────────
+
+/** The Metacritic score as a coloured tag, just the number: green from 75, yellow from 50, red below. Screen readers hear what it is. */
+export function Score({ n, className = '' }: { n: number; className?: string }) {
+  return <span title={`Metacritic score: ${n} out of 100`} className={`tag ${scoreTone(n)} ${className}`}>{n}<span className="sr-only"> on Metacritic</span></span>
+}
 
 // Out today in green (a live tournament in red), the coming week in yellow, later in grey
 export const TONE = { live: 'text-go', soon: 'text-mark', future: 'text-muted', past: 'text-dim' }
@@ -279,7 +285,7 @@ export function Card({ e, today, row }: { e: Ev; today: string; row?: boolean })
             </span>
           )}
           {esport ? !!e.prize && <span className="tag absolute bottom-2.5 left-2.5 bg-black/70 text-white backdrop-blur-md">{e.prize}</span>
-            : !!e.metacritic && <span title="Metacritic score" className={`tag absolute bottom-2.5 left-2.5 ${scoreTone(e.metacritic)}`}>{e.metacritic}</span>}
+            : !!e.metacritic && <Score n={e.metacritic} className="absolute bottom-2.5 left-2.5" />}
         </div>
         <div className={row ? 'flex min-w-0 flex-1 gap-3 sm:mt-3' : 'mt-3 flex gap-3'}>
           <DateBlock start={e.start} tba={e.tba} />

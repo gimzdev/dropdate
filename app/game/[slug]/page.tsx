@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { PlayedButton } from '@/components/account'
+import { Progress } from '@/components/account'
 import { About, Gallery, Rail } from '@/components/game'
 import { Footer } from '@/components/site'
 import { BigDate, Countdown, Header, Icon, SaveButton } from '@/components/ui'
@@ -80,7 +80,7 @@ export default async function GamePage({ params }: Props) {
               <div className="mt-7 flex flex-wrap gap-3">
                 {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn btn-mark"><Icon name="plus" />Add to calendar</a>}
                 {(ev || ACCOUNTS) && <SaveButton id={g.id} title={g.name} label variant="glass" needsAccount={!ev} />}
-                {ACCOUNTS && released && <PlayedButton id={g.id} title={g.name} />}
+                {ACCOUNTS && released && <Progress id={g.id} title={g.name} />}
                 {g.website && <a href={g.website} {...out} className="btn btn-glass">Official site<Icon name="external" className="h-3.5 w-3.5" /></a>}
               </div>
             </div>

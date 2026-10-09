@@ -24,7 +24,7 @@ export default async function SignInPage({ searchParams }: Props) {
       <main id="main" className="wrap pt-28 pb-20 md:pt-36 md:pb-28">
         <div className="mx-auto max-w-md">
           <h1 className="display text-[clamp(3rem,4vw+1.75rem,5rem)]">{signedIn ? 'Welcome back' : 'Sign in'}</h1>
-          {!signedIn && <p className="mt-4 mb-10 text-lg text-muted">Keep a wishlist of what is coming and a list of the games you have played, on every device.</p>}
+          {!signedIn && <p className="mt-4 mb-10 text-lg text-muted">Keep a wishlist of what is coming and the games you have played, on every device.</p>}
         </div>
         {signedIn ? <Resume next={next} />
           : <SignIn next={next} methods={methods()} dev={devCodes() && !process.env.RESEND_API_KEY} failed={!!(first(sp.error) || first(sp.failed))} />}
