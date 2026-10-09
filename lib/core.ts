@@ -84,5 +84,26 @@ export function ics(events: Ev[]) {
     'END:VCALENDAR', ''].map(fold75).join('\r\n')
 }
 
+/** A calendar feed address as calendar apps want it to subscribe. */
+export const webcal = (url: string) => url.replace(/^https?:\/\//, 'webcal://')
 export const googleUrl = (e: Pick<Ev, 'title' | 'start' | 'end' | 'slug' | 'url'>) =>
   `https://calendar.google.com/calendar/render?${new URLSearchParams({ action: 'TEMPLATE', text: e.title, dates: `${ymd(e.start)}/${until(e)}`, details: link(e) })}`
+
+// ── Accounts (shared by the server and the browser) ─────────────────────
+
+/** Whether this build has accounts: the generator sets it when a database is configured. Without one the site works as before, with the list kept in the browser. */
+export const ACCOUNTS = process.env.NEXT_PUBLIC_ACCOUNTS === '1'
+export type ListName = 'wishlist' | 'played'
+/** How the calendar names a game or tournament: rawg-123, steam-456, ps-789. */
+export const GAME_KEY = /^(?:rawg|steam|ps)-\d{1,12}$/
+/** What someone has marked: both flags can be set (played, and wishlisted again to replay). */
+export interface Flags { wishlist: boolean; played: boolean }
+/** A game in someone's library: its public details, and when they wishlisted it or marked it played. */
+export interface LibItem { ev: Ev; wishlisted?: string; played?: string }
+/**
+ * A same-site path to return to after signing in. Anything else (another site, //host, backslashes, the sign-in page itself) falls back.
+ * No control characters, spaces or non-ASCII either: browsers drop tabs and newlines inside an address, so "/<tab>/evil.example" would mean "//evil.example".
+ */
+export const safeNext = (n?: string | null, fallback = '/profile') => (n && /^\/(?![/\\])(?!signin(?:[/?#]|$))[^\x00-\x20\x7f-\uffff\\]*$/.test(n) ? n : fallback)
+/** "March 2026" for a timestamp: when someone joined. */
+export const monthYear = (iso: string) => new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(new Date(iso))

@@ -2,10 +2,11 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { PlayedButton } from '@/components/account'
 import { About, Gallery, Rail } from '@/components/game'
 import { Footer } from '@/components/site'
 import { BigDate, Countdown, Header, Icon, SaveButton } from '@/components/ui'
-import { SITE, gap, googleUrl, lite, longDate, monthLabel, scoreTone, srcSet, status } from '@/lib/core'
+import { ACCOUNTS, SITE, gap, googleUrl, lite, longDate, monthLabel, scoreTone, srcSet, status } from '@/lib/core'
 import { getEvents, getGame } from '@/lib/data'
 
 export const revalidate = 21600
@@ -37,7 +38,7 @@ export default async function GamePage({ params }: Props) {
   const [g, data] = await Promise.all([getGame((await params).slug), getEvents()])
   if (!g) notFound()
   const { today } = data, ev = data.events.find((e) => e.id === g.id), date = ev?.start ?? g.released // the hourly calendar has the freshest date
-  const st = date ? status({ kind: 'release', start: date }, today) : undefined, upcoming = !!date && date > today, tba = !!ev?.tba
+  const st = date ? status({ kind: 'release', start: date }, today) : undefined, upcoming = !!date && date > today, released = !!date && date <= today, tba = !!ev?.tba
   const nearby = date ? data.events.filter((e) => e.id !== g.id && Math.abs(gap(date, e.start)) <= 10).sort((a, b) => b.pop - a.pop).slice(0, 12).map(lite) : []
   const facts = filled([
     ['Release date', date ? (tba ? `${monthLabel(date.slice(0, 7))}, exact day not announced` : longDate(date)) : 'Not announced yet'],
@@ -47,6 +48,7 @@ export default async function GamePage({ params }: Props) {
   ])
   const details = filled([
     ['Average playtime', g.playtime ? `${g.playtime} hours` : ''],
+    ['Metacritic', g.metacritic ? `${g.metacritic} out of 100` : 'No score yet'],
     ['RAWG rating', g.rating ? `${g.rating.toFixed(1)} out of 5` : ''],
     ['Age rating', g.esrb ?? ''],
   ])
@@ -77,7 +79,8 @@ export default async function GamePage({ params }: Props) {
               {upcoming && <Countdown start={date} today={today} className="mt-6 short:hidden" />}
               <div className="mt-7 flex flex-wrap gap-3">
                 {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn btn-mark"><Icon name="plus" />Add to calendar</a>}
-                {ev && <SaveButton id={ev.id} title={g.name} label variant="glass" />}
+                {(ev || ACCOUNTS) && <SaveButton id={g.id} title={g.name} label variant="glass" needsAccount={!ev} />}
+                {ACCOUNTS && released && <PlayedButton id={g.id} title={g.name} />}
                 {g.website && <a href={g.website} {...out} className="btn btn-glass">Official site<Icon name="external" className="h-3.5 w-3.5" /></a>}
               </div>
             </div>

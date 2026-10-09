@@ -1,37 +1,18 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { type AnchorHTMLAttributes, type ReactNode, type SyntheticEvent, type TouchEvent, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { type Ev, ago, href, iso, longDate, monthLabel, monthShort, scoreTone, status, toDate, weekday } from '@/lib/core'
+import { usePathname, useRouter } from 'next/navigation'
+import { type AnchorHTMLAttributes, type ReactNode, type SyntheticEvent, type TouchEvent, useEffect, useRef, useState } from 'react'
+import { useSaved } from '@/lib/account'
+import { ACCOUNTS, type Ev, ago, href, iso, longDate, monthLabel, monthShort, scoreTone, status, toDate, weekday } from '@/lib/core'
+import { AccountMenu } from './account'
+import { Heart, Icon } from './icons'
 import { Logo } from './logo'
 
-// ── Icons ───────────────────────────────────────────────────────────────
+export { Heart, Icon, useSaved }
 
-const PATHS = {
-  search: 'M20 20l-4.2-4.2M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z',
-  menu: 'M4 7h16M4 12h16M4 17h16',
-  close: 'M6 6l12 12M18 6L6 18',
-  left: 'M15 5l-7 7 7 7',
-  right: 'M9 5l7 7-7 7',
-  down: 'M6 9l6 6 6-6',
-  plus: 'M12 5v14M5 12h14',
-  calendar: 'M8 3v3M16 3v3M4 9.5h16M6 5h12a2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2z',
-  grid: 'M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM13.5 13.5H20V20h-6.5z',
-  external: 'M14 5h5v5M19 5l-8 8M17 14v4a1 1 0 01-1 1H6a1 1 0 01-1-1V8a1 1 0 011-1h4',
-  copy: 'M9 9h10v10H9zM15 9V5H5v10h4',
-  check: 'M5 12.5l4.5 4.5L19 7.5',
-  play: 'M8 5.5v13l10.5-6.5z',
-  pause: 'M9 5.5v13M15 5.5v13',
-  trophy: 'M8 20h8M12 16v4M7 4h10v4a5 5 0 01-10 0zM17 5h3v1a3 3 0 01-3 3M7 5H4v1a3 3 0 003 3',
-}
+// ── Marks ───────────────────────────────────────────────────────────────
 
-export const Icon = ({ name, className = 'h-4 w-4', stroke = 2 }: { name: keyof typeof PATHS; className?: string; stroke?: number }) => (
-  <svg className={className} fill={name === 'play' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d={PATHS[name]} /></svg>
-)
-export const Heart = ({ on, className = 'h-[18px] w-[18px]' }: { on: boolean; className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.5-9.2C1.2 8.1 3 4.5 6.5 4.5c2 0 3.5 1 5.5 3 2-2 3.5-3 5.5-3 3.5 0 5.3 3.6 4 6.8-2 4.6-9.5 9.2-9.5 9.2z" /></svg>
-)
 /** The loop you draw around a date on a wall calendar. It marks today, and nothing else. */
 export const Circled = ({ className = '' }: { className?: string }) => (
   <svg viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true" className={`pointer-events-none absolute text-mark ${className}`}>
@@ -40,34 +21,6 @@ export const Circled = ({ className = '' }: { className?: string }) => (
 )
 
 // ── State shared across the page ───────────────────────────────────────
-
-// My list: kept in this browser, shared by every heart on the page and across tabs
-const KEY = 'dropdate:saved', NONE: string[] = [], subs = new Set<() => void>()
-let raw: string | null = null, saved = NONE
-const read = () => {
-  try {
-    const r = localStorage.getItem(KEY)
-    if (r !== raw) { raw = r; const v: unknown = r ? JSON.parse(r) : null; saved = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : NONE }
-  } catch {}
-  return saved
-}
-const subscribe = (fn: () => void) => {
-  const other = (e: StorageEvent) => e.key === KEY && fn()
-  subs.add(fn)
-  addEventListener('storage', other)
-  return () => { subs.delete(fn); removeEventListener('storage', other) }
-}
-export function useSaved() {
-  const ids = useSyncExternalStore(subscribe, read, () => NONE)
-  const toggle = (id: string) => {
-    const now = read()
-    saved = now.includes(id) ? now.filter((x) => x !== id) : [...now, id]
-    raw = JSON.stringify(saved)
-    try { localStorage.setItem(KEY, raw) } catch {}
-    subs.forEach((fn) => fn())
-  }
-  return { ids, has: (id: string) => ids.includes(id), toggle }
-}
 
 /** Pages are rendered on the server with its date; the browser then switches to the visitor's own today. */
 export function useToday(server: string) {
@@ -101,7 +54,7 @@ export function useSwipe(go: (d: number) => void, min: number) {
   }
 }
 
-// Jumping to the calendar section from anywhere: search, my list, a given day
+// Jumping to the calendar section from anywhere: search, the wishlist, a given day
 export interface ExploreIntent { list?: boolean; day?: string; focus?: boolean }
 export const EXPLORE_EVENT = 'dropdate:explore'
 
@@ -173,16 +126,24 @@ export function BigDate({ date, tba, size, unknown, label }: { date: string; tba
   )
 }
 
-/** A heart on artwork, a quiet heart in lists, or a labelled button. Saving shows in the header count. */
-export function SaveButton({ id, title, label, variant = 'art' }: { id: string; title: string; label?: boolean; variant?: 'art' | 'glass' | 'plain' }) {
-  const { has, toggle } = useSaved()
+/** A heart on artwork, a quiet heart in lists, or a labelled button: the wishlist. It shows in the header count. */
+export function SaveButton({ id, title, label, variant = 'art', needsAccount }: { id: string; title: string; label?: boolean; variant?: 'art' | 'glass' | 'plain'; needsAccount?: boolean }) {
+  const { has, toggle, signedIn, phase } = useSaved(), router = useRouter(), path = usePathname()
   const on = has(id), [bump, setBump] = useState(0)
   const props = {
-    type: 'button' as const, 'aria-pressed': on, ...(!label && { 'aria-label': `Save ${title}`, title: on ? 'Saved to my list' : 'Save to my list' }),
-    onClick: (ev: { preventDefault(): void; stopPropagation(): void }) => { ev.preventDefault(); ev.stopPropagation(); toggle(id); setBump((n) => n + 1) },
+    type: 'button' as const, 'aria-pressed': on, ...(!label && { 'aria-label': `Add ${title} to your wishlist`, title: on ? 'On your wishlist' : 'Add to your wishlist' }),
+    onClick: (ev: { preventDefault(): void; stopPropagation(): void }) => {
+      ev.preventDefault()
+      ev.stopPropagation()
+      const signIn = () => router.push(`/signin?next=${encodeURIComponent(path)}`)
+      // a game the calendar does not hold can only be kept in an account
+      if (needsAccount && !signedIn && phase !== 'loading') return signIn()
+      setBump((n) => n + 1)
+      void toggle(id, needsAccount).then((done) => { if (!done) signIn() })
+    },
   }
   const heart = <span key={bump} className={`inline-flex ${bump ? 'animate-pop' : ''} ${on ? 'text-mark' : ''}`}><Heart on={on} /></span>
-  if (label) return <button {...props} className={`btn ${variant === 'glass' ? 'btn-glass' : 'btn-line'}`}>{heart}{on ? 'Saved' : 'Save'}</button>
+  if (label) return <button {...props} className={`btn ${variant === 'glass' ? 'btn-glass' : 'btn-line'}`}>{heart}{on ? 'Wishlisted' : 'Wishlist'}</button>
   return (
     <button {...props} className={variant === 'plain' ? `grid h-10 w-10 shrink-0 place-items-center rounded-full transition hover:bg-raised ${on ? 'text-mark' : 'text-dim hover:text-fg'}`
       : `grid h-9 w-9 place-items-center rounded-full backdrop-blur-md transition ${on ? 'bg-black/75' : 'bg-black/55 text-white opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:bg-black/80 focus-visible:opacity-100 touch:opacity-100'}`}>
@@ -229,7 +190,7 @@ export function HomeLink({ className, children }: { className?: string; children
 const NAV = [['This week', '/#week'], ['Upcoming', '/#upcoming'], ['Esports', '/#esports'], ['Calendar', '/#explore'], ['API', '/docs']]
 
 export function Header({ overHero = false }: { overHero?: boolean }) {
-  const explore = useExplore(), { ids } = useSaved()
+  const explore = useExplore(), { ids, signedIn } = useSaved()
   const [scrolled, setScrolled] = useState(false), [open, setOpen] = useState(false)
   useEffect(() => {
     const onScroll = () => setScrolled(scrollY > 12)
@@ -247,11 +208,19 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
   const clear = overHero && !scrolled && !open // see-through over the hero artwork
   const ctl = `btn btn-sm ${clear ? 'btn-glass' : 'btn-line'}`
   const go = (intent: ExploreIntent) => { setOpen(false); explore(intent) }
+  const wishlist = `${ctl} relative w-9 px-0 sm:w-auto sm:px-4`
+  const heart = (
+    <>
+      <span className={ids.length ? 'text-mark' : ''}><Heart on={ids.length > 0} className="h-4 w-4" /></span>
+      <span className="hidden sm:inline">Wishlist</span>
+      {ids.length > 0 && <span className="absolute -top-1.5 -right-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-mark px-1 text-[11px] font-bold text-black sm:static sm:-mr-1.5">{ids.length}</span>}
+    </>
+  )
 
   return (
     <header className={`fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300 ${clear ? 'border-transparent bg-linear-to-b from-black/55 to-transparent bg-origin-border' : 'border-line/10 bg-black/85 backdrop-blur-xl'}`}>
       <div className="wrap flex h-16 items-center gap-2">
-        <HomeLink className="flex shrink-0 items-center gap-2 rounded-lg pr-2"><Logo size={30} /><span className="display text-[23px] text-white">Dropdate</span></HomeLink>
+        <HomeLink className="flex shrink-0 items-center gap-2 rounded-lg pr-2"><Logo size={30} /><span className="display text-[23px] text-white max-[339px]:hidden">Dropdate</span></HomeLink>
         <nav aria-label="Main" className="ml-5 hidden items-center lg:flex">
           {NAV.map(([name, to]) => <Link key={name} href={to} className={`rounded-full px-3.5 py-2 text-[15px] font-medium transition ${clear ? 'text-white/80 hover:text-white' : 'text-muted hover:text-fg'}`}>{name}</Link>)}
         </nav>
@@ -259,11 +228,10 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
           <button type="button" onClick={() => go({ focus: true })} aria-label="Search games and tournaments" className={`${ctl} w-9 px-0 sm:w-auto sm:px-4`}>
             <Icon name="search" /><span className="hidden sm:inline">Search</span><span className="kbd hidden opacity-70 md:inline-grid">/</span>
           </button>
-          <button type="button" onClick={() => go({ list: true })} aria-label={`My list, ${ids.length} saved`} className={`${ctl} relative w-9 px-0 sm:w-auto sm:px-4`}>
-            <span className={ids.length ? 'text-mark' : ''}><Heart on={ids.length > 0} className="h-4 w-4" /></span>
-            <span className="hidden sm:inline">My list</span>
-            {ids.length > 0 && <span className="absolute -top-1.5 -right-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-mark px-1 text-[11px] font-bold text-black sm:static sm:-mr-1.5">{ids.length}</span>}
-          </button>
+          {signedIn
+            ? <Link href="/profile" aria-label={`Your wishlist, ${ids.length} saved`} className={wishlist}>{heart}</Link>
+            : <button type="button" onClick={() => go({ list: true })} aria-label={`Your wishlist, ${ids.length} saved`} className={wishlist}>{heart}</button>}
+          {ACCOUNTS && <AccountMenu className={ctl} />}
           <button type="button" onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} aria-controls="site-menu" className={`${ctl} w-9 px-0 lg:hidden`}><Icon name={open ? 'close' : 'menu'} /></button>
         </div>
       </div>
@@ -281,7 +249,7 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
 // ── Card ────────────────────────────────────────────────────────────────
 
 // Out today in green (a live tournament in red), the coming week in yellow, later in grey
-const TONE = { live: 'text-go', soon: 'text-mark', future: 'text-muted', past: 'text-dim' }
+export const TONE = { live: 'text-go', soon: 'text-mark', future: 'text-muted', past: 'text-dim' }
 
 /** An event as a card. With `row`, phones get a compact row (artwork beside the date) so long lists stay scannable. */
 export function Card({ e, today, row }: { e: Ev; today: string; row?: boolean }) {

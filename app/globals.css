@@ -4,6 +4,8 @@
 @custom-variant touch (@media (hover: none));
 /* Short windows (laptops at 125%, phones in landscape): the hero drops its optional extras */
 @custom-variant short (@media (max-height: 700px));
+/* A browser that signed in before: the page head marks <html data-signed> before the first paint, so the header shows the right control straight away */
+@custom-variant signed (&:where([data-signed] *));
 
 /*
   Dropdate

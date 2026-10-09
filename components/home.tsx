@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type KeyboardEvent, type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { type Ev, type Kind, type Payload, type Platform, PLATFORMS, gap, googleUrl, href, iso, longDate, monthLabel, monthShort, range, scoreTone, shift, srcSet, status, toDate, weekday } from '@/lib/core'
+import { type Ev, type Kind, type Payload, type Platform, PLATFORMS, gap, googleUrl, href, iso, longDate, monthLabel, monthShort, range, scoreTone, shift, srcSet, status, toDate, webcal, weekday } from '@/lib/core'
 import { type Chip, removeChip, search } from '@/lib/search'
 import { BigDate, Card, Circled, Countdown, DateBlock, EXPLORE_EVENT, type ExploreIntent, Heart, Icon, Img, Open, SaveButton, Section, Thumb, Updated, fallback, useExplore, useSaved, useSwipe, useToday } from './ui'
 
@@ -288,7 +288,6 @@ const EXAMPLES = ['ps5 games next month', 'esports this weekend', 'switch in dec
 const KINDS = { all: 'releases and tournaments', release: 'releases', tournament: 'tournaments' }
 const GRID = 'grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2 sm:gap-y-9 lg:grid-cols-3 xl:grid-cols-4'
 const score = (e: Ev) => e.metacritic ?? (e.rating ?? 0) * 20
-const webcal = (url: string) => url.replace(/^https?:\/\//, 'webcal://')
 
 function Segment<T extends string>({ label, value, onChange, items }: { label: string; value: T; onChange: (v: T) => void; items: [T, ReactNode][] }) {
   return (
@@ -375,9 +374,9 @@ export function Explorer({ data }: { data: Payload }) {
 
   // The calendar feed follows what is on screen, or the saved list
   const mine = onlySaved && saved.ids.length > 0
-  const params = new URLSearchParams(Object.entries(mine ? { ids: saved.ids.join(',') } : { q: q.trim(), type: kind, platform, genre }).filter(([, v]) => v && v !== 'all')).toString()
+  const params = new URLSearchParams(Object.entries(mine ? { ids: saved.ids.slice(0, 300).join(',') } : { q: q.trim(), type: kind, platform, genre }).filter(([, v]) => v && v !== 'all')).toString()
   const feed = origin ? `${origin}/api/calendar.ics${params ? `?${params}` : ''}` : '', done = !!copied && copied === feed
-  const describe = mine ? 'everything on your list' : `upcoming ${platform !== 'all' ? `${platform} ` : ''}${KINDS[kind]}${genre !== 'all' ? ` in ${genre}` : ''}${q.trim() ? ` matching “${q.trim()}”` : ''}`
+  const describe = mine ? 'everything on your wishlist' : `upcoming ${platform !== 'all' ? `${platform} ` : ''}${KINDS[kind]}${genre !== 'all' ? ` in ${genre}` : ''}${q.trim() ? ` matching “${q.trim()}”` : ''}`
   const copy = async () => {
     try { await navigator.clipboard.writeText(feed) } catch { prompt('Calendar feed link', feed) }
     setCopied(feed)
@@ -405,7 +404,7 @@ export function Explorer({ data }: { data: Payload }) {
             </div>
             <span aria-hidden className="mx-1 h-6 w-px shrink-0 bg-line/12" />
             <Select label="Genre" value={genre} onChange={setGenre} options={[['all', 'All genres'], ...genres]} className="w-[150px]" />
-            <button type="button" onClick={() => setOnlySaved(!onlySaved)} aria-pressed={onlySaved} className="pill"><Heart on={onlySaved} className="h-4 w-4" />My list{saved.ids.length ? <span className="opacity-70">{saved.ids.length}</span> : null}</button>
+            <button type="button" onClick={() => setOnlySaved(!onlySaved)} aria-pressed={onlySaved} className="pill"><Heart on={onlySaved} className="h-4 w-4" />Wishlist{saved.ids.length ? <span className="opacity-70">{saved.ids.length}</span> : null}</button>
           </div>
           <Segment label="View" value={view} onChange={setView}
             items={[['grid', <><Icon name="grid" /><span className="sr-only sm:not-sr-only">Grid</span></>], ['calendar', <><Icon name="calendar" /><span className="sr-only sm:not-sr-only">Month</span></>]]} />
@@ -441,8 +440,8 @@ export function Explorer({ data }: { data: Payload }) {
           {list.length > limit && <div className="mt-12 text-center"><button type="button" onClick={() => setLimit((l) => l + PAGE * 2)} className="btn btn-line px-7">Show more<span className="text-muted">{list.length - limit} left</span></button></div>}
           {!data.error && !list.length && (
             <div className={`${empty} py-16`}>
-              <p className="text-lg font-semibold">{onlySaved ? 'Nothing saved yet' : 'No matches'}</p>
-              <p className="mx-auto mt-2 max-w-sm text-muted">{onlySaved ? 'Tap the heart on any game or tournament to keep it here. Then add your whole list to your calendar in one go.' : 'Try fewer words, another month, or clear the filters.'}</p>
+              <p className="text-lg font-semibold">{onlySaved ? 'Your wishlist is empty' : 'No matches'}</p>
+              <p className="mx-auto mt-2 max-w-sm text-muted">{onlySaved ? 'Tap the heart on any game or tournament to keep it here. Then add the whole wishlist to your calendar in one go.' : 'Try fewer words, another month, or clear the filters.'}</p>
               <button type="button" className="btn btn-mark mt-7" onClick={reset}>{onlySaved ? 'Browse the calendar' : 'Clear filters'}</button>
             </div>
           )}
@@ -453,7 +452,7 @@ export function Explorer({ data }: { data: Payload }) {
         <div className="flex gap-4">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-mark text-black"><Icon name="calendar" className="h-6 w-6" /></span>
           <div>
-            <h3 className="text-lg font-semibold">Add {mine ? 'your list' : 'this view'} to your calendar</h3>
+            <h3 className="text-lg font-semibold">Add {mine ? 'your wishlist' : 'this view'} to your calendar</h3>
             <p className="mt-1 max-w-xl text-[15px] text-muted">A live feed of {describe}. When a date moves, your calendar follows.</p>
           </div>
         </div>

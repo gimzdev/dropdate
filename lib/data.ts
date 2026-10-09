@@ -53,20 +53,23 @@ const PLAT: Record<string, Platform> = { pc: 'PC', mac: 'PC', linux: 'PC', web: 
 const rawgImg = (u: string, w: 640 | 1920) => u.replace(/\/media\/(?=games\/|screenshots\/)/, `/media/resize/${w}/-/`)
 const names = (l?: { name: string }[]) => (l ?? []).map((x) => x.name)
 
+/** A RAWG game as a calendar entry. Lists need a date and artwork to be worth a card; a single game someone saved does not. */
+function rawgEv(g: Rawg, lenient = false): Ev | null {
+  if (!lenient && (!g.released || !g.background_image)) return null // no date or no artwork, no card
+  const platforms = [...new Set((g.parent_platforms ?? []).map((p) => PLAT[p.platform.slug]).filter(Boolean))]
+  return {
+    id: `rawg-${g.id}`, slug: g.slug, title: g.name, kind: 'release', start: g.released ?? '', tba: g.tba || undefined,
+    platforms: platforms.length ? platforms : ['PC'], thumb: g.background_image ? rawgImg(g.background_image, 640) : '', image: g.background_image ? rawgImg(g.background_image, 1920) : undefined,
+    shots: (g.short_screenshots ?? []).slice(1, 5).map((s) => rawgImg(s.image, 640)), genres: names(g.genres),
+    rating: g.rating || undefined, metacritic: g.metacritic || undefined, pop: g.added ?? 0,
+  }
+}
+
 async function rawg(dates: string, max: number): Promise<Ev[]> {
   const key = env.RAWG_API_KEY
   if (!key) return []
   const all = await pages(max, (p) => get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&dates=${dates}&ordering=-added&page_size=40&page=${p}`))
-  return all.flatMap((r) => r?.results ?? []).flatMap((g): Ev[] => {
-    if (!g.released || !g.background_image) return [] // no date or no artwork, no card
-    const platforms = [...new Set((g.parent_platforms ?? []).map((p) => PLAT[p.platform.slug]).filter(Boolean))]
-    return [{
-      id: `rawg-${g.id}`, slug: g.slug, title: g.name, kind: 'release', start: g.released, tba: g.tba || undefined,
-      platforms: platforms.length ? platforms : ['PC'], thumb: rawgImg(g.background_image, 640), image: rawgImg(g.background_image, 1920),
-      shots: (g.short_screenshots ?? []).slice(1, 5).map((s) => rawgImg(s.image, 640)), genres: names(g.genres),
-      rating: g.rating || undefined, metacritic: g.metacritic || undefined, pop: g.added ?? 0,
-    }]
-  })
+  return all.flatMap((r) => r?.results ?? []).flatMap((g) => rawgEv(g) ?? [])
 }
 
 async function rawgGame(slug: string): Promise<Game | null> {
@@ -74,12 +77,13 @@ async function rawgGame(slug: string): Promise<Game | null> {
   if (!key) return null
   // details barely change: kept two days, which keeps RAWG's monthly quota safe even when crawlers visit every page
   const at = <T,>(sub = '') => get<T>(`${RAWG}/games/${slug}${sub}?key=${key}`, 2 * DAY)
-  const [g, shots, movies, stores] = await Promise.all([
-    at<Rawg>(), at<{ results?: { image: string }[] }>('/screenshots'),
-    at<{ results?: { preview: string; data: { max?: string; 480?: string } }[] }>('/movies'), at<{ results?: { store_id: number; url: string }[] }>('/stores'),
-  ])
+  const g = await at<Rawg>() // asked first and alone: a page that does not exist costs one request, not four
   if (g === undefined) throw new Error('RAWG is unreachable') // never cache a hiccup as a 404 page
   if (!g) return null
+  const [shots, movies, stores] = await Promise.all([
+    at<{ results?: { image: string }[] }>('/screenshots'),
+    at<{ results?: { preview: string; data: { max?: string; 480?: string } }[] }>('/movies'), at<{ results?: { store_id: number; url: string }[] }>('/stores'),
+  ])
   const store = new Map((g.stores ?? []).map((s) => [s.store.id, s.store.name])), clip = movies?.results?.find((m) => m.data.max || m.data[480])
   return {
     id: `rawg-${g.id}`, slug: g.slug, name: g.name, description: g.description_raw?.trim() || undefined, released: g.released ?? undefined,
@@ -94,11 +98,12 @@ async function rawgGame(slug: string): Promise<Game | null> {
 }
 
 /** Any game RAWG knows, calendar or not: the search box falls back to this so older and long-running games can be found too. */
-export async function searchGames(q: string): Promise<{ slug: string; title: string; released?: string; thumb: string }[]> {
+export interface Found { key: string; slug: string; title: string; released?: string; thumb: string; metacritic?: number }
+export async function searchGames(q: string): Promise<Found[]> {
   const key = env.RAWG_API_KEY
   if (!key || q.trim().length < 2) return []
   const res = await get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&search=${encodeURIComponent(q.trim().slice(0, 80))}&search_precise=true&page_size=8`)
-  return (res?.results ?? []).flatMap((g) => (g.background_image ? [{ slug: g.slug, title: g.name, released: g.released ?? undefined, thumb: rawgImg(g.background_image, 640) }] : []))
+  return (res?.results ?? []).map((g) => ({ key: `rawg-${g.id}`, slug: g.slug, title: g.name, released: g.released ?? undefined, thumb: g.background_image ? rawgImg(g.background_image, 640) : '', metacritic: g.metacritic || undefined }))
 }
 
 // ── Steam (no key needed) ───────────────────────────────────────────────
@@ -150,16 +155,21 @@ async function steam(rows: Row[], skip: Set<string>, today: string): Promise<Ev[
       if (apps[i] === undefined) down = true
     }
   }))
-  return picks.flatMap((r, i): Ev[] => {
+  return picks.flatMap((r, i) => {
     const a = apps[i]
-    if (!a?.header_image || !listed(a)) return []
-    const title = clean(a.name), shots = a.screenshots ?? []
-    return [{
-      id: `steam-${r.id}`, slug: kebab(`steam ${r.id} ${title}`), title, kind: 'release', start: steamDate(a.release_date?.date) ?? (r.date as string),
-      platforms: ['PC'], thumb: a.header_image, image: shots[0]?.path_full ?? a.header_image, shots: shots.slice(0, 4).map((s) => s.path_thumbnail),
-      genres: (a.genres ?? []).map((g) => g.description), metacritic: a.metacritic?.score, pop: r.pop,
-    }]
+    return (a && steamEv(r.id, a, r.date, r.pop)) || []
   })
+}
+
+/** A Steam app as a calendar entry; `date` is the list's date when the app itself has no exact one. */
+function steamEv(id: string, a: SteamApp, date: string | undefined, pop: number): Ev | null {
+  if (!a.header_image || !listed(a)) return null
+  const title = clean(a.name), shots = a.screenshots ?? []
+  return {
+    id: `steam-${id}`, slug: kebab(`steam ${id} ${title}`), title, kind: 'release', start: steamDate(a.release_date?.date) ?? date ?? '',
+    platforms: ['PC'], thumb: a.header_image, image: shots[0]?.path_full ?? a.header_image, shots: shots.slice(0, 4).map((s) => s.path_thumbnail),
+    genres: (a.genres ?? []).map((g) => g.description), metacritic: a.metacritic?.score, pop,
+  }
 }
 
 async function steamGame(id: string): Promise<Game | null> {
@@ -250,8 +260,37 @@ export async function getEvents(): Promise<Payload> {
   }
 }
 
-/** A game page: RAWG slugs, or steam-<appid>-<name> for games only Steam knows. Once per request, however often a page asks. */
+/** The source's own copy of a game, bypassing the calendar. Throws when the source cannot be reached, so an outage is never taken for "no such game". */
+export async function fromSource(key: string): Promise<Ev | null> {
+  const [, src, id] = key.match(/^(rawg|steam)-(\d+)$/) ?? []
+  if (src === 'rawg' && env.RAWG_API_KEY) {
+    const g = await get<Rawg>(`${RAWG}/games/${id}?key=${env.RAWG_API_KEY}`)
+    if (g === undefined) throw new Error('RAWG is unreachable')
+    return g ? rawgEv(g, true) : null
+  }
+  if (src === 'steam') {
+    const a = await steamApp(id)
+    if (a === undefined) throw new Error('Steam is unreachable')
+    return a ? steamEv(id, a, undefined, 0) : null
+  }
+  return null
+}
+
+const missing = new Map<string, number>() // slugs a source said do not exist, remembered for ten minutes in this server instance
+const SLUG = /^[a-z0-9][a-z0-9-]{0,119}$/i
+
+/**
+ * A game page: RAWG slugs, or steam-<appid>-<name> for games only Steam knows. Once per request, however often a page asks.
+ * Addresses that cannot be a game are answered without asking anyone, and one that a source has just said does not exist is not asked again for a while:
+ * the sources' request allowances are shared by every visitor.
+ */
 export const getGame = cache(async (slug: string): Promise<Game | null> => {
+  if (!SLUG.test(slug) || (missing.get(slug) ?? 0) > Date.now()) return null
   const steamId = slug.match(/^steam-(\d+)/)?.[1]
-  return steamId ? steamGame(steamId) : /^[a-z0-9-]+$/i.test(slug) ? rawgGame(slug) : null
+  const game = await (steamId ? steamGame(steamId) : rawgGame(slug))
+  if (!game) {
+    if (missing.size > 500) missing.clear()
+    missing.set(slug, Date.now() + 600_000)
+  }
+  return game
 })

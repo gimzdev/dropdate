@@ -1,6 +1,13 @@
+// What a page may load: its own scripts and styles (Next writes a few inline ones), pictures and video from any https address (the game
+// sources' servers), and nothing else. Only in production builds: the development server needs more.
+const csp = [
+  "default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob: https:", "media-src 'self' https:",
+  "font-src 'self' data:", "connect-src 'self'", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
+].join('; ')
 const security = [
   ['X-Content-Type-Options', 'nosniff'], ['Referrer-Policy', 'strict-origin-when-cross-origin'], ['X-Frame-Options', 'DENY'],
   ['Permissions-Policy', 'camera=(), microphone=(), geolocation=()'], ['Strict-Transport-Security', 'max-age=31536000; includeSubDomains'],
+  ...(process.env.NODE_ENV === 'production' ? [['Content-Security-Policy', csp]] : []),
 ]
 
 /** @type {import('next').NextConfig} */

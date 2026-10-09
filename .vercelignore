@@ -2,3 +2,5 @@
 node_modules
 .next
 *.sh
+.dd-secrets
+vercel.json.backup-*

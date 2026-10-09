@@ -80,7 +80,7 @@ export default function Docs() {
       </DocSection>
 
       <DocSection id="freshness" title="Freshness and fair use">
-        <p className="prose-dd">Data refreshes on its own every hour, and responses are cached at the edge. Please cache on your side too and keep request rates reasonable.</p>
+        <p className="prose-dd">Data refreshes on its own every hour, and responses are cached at the edge. Please cache on your side too and keep request rates reasonable. Lookups by name or slug (<code className="code-inline">/api/search</code> and <code className="code-inline">/api/games</code>) pass through to a data source with a shared allowance, so they are limited per network: past that you get a 429 and a Retry-After header.</p>
       </DocSection>
     </Doc>
   )

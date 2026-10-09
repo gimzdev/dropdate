@@ -2,17 +2,21 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { PLATFORMS, ics } from '@/lib/core'
 import { search } from '@/lib/search'
 import { getEvents, getGame, searchGames } from '@/lib/data'
+import { allow, clientIp } from '@/lib/limit'
 
 // The public API: /api/events, /api/tournaments, /api/games, /api/search and /api/calendar.ics
 export const dynamic = 'force-dynamic'
 
 const json = (body: unknown, cache = 'public, s-maxage=3600', status = 200) => NextResponse.json(body, { status, headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': cache } })
+/** Lookups by name or slug go to RAWG, whose request allowance is shared by every visitor: one network may make this many a minute. */
+const tooMany = () => NextResponse.json({ error: 'Too many requests. Try again in a minute.' }, { status: 429, headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store', 'Retry-After': '60' } })
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ name: string }> }) {
   const sp = req.nextUrl.searchParams, name = (await params).name
   if (name === 'games') {
     const slug = sp.get('slug')
     if (!slug) return NextResponse.json({ error: 'slug is required' }, { status: 400 })
+    if (!(await allow(`game:${clientIp(req)}`, 30, 60))) return tooMany()
     try {
       const game = await getGame(slug)
       return game ? json({ data: game }) : NextResponse.json({ error: 'not found' }, { status: 404 })
@@ -21,7 +25,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ name
     }
   }
   // Title search across every game RAWG knows (the calendar itself only holds what is released or coming soon)
-  if (name === 'search') return json({ data: await searchGames(sp.get('q') ?? '').catch(() => []) })
+  if (name === 'search') {
+    if (!(await allow(`search:${clientIp(req)}`, 40, 60))) return tooMany()
+    return json({ data: await searchGames(sp.get('q') ?? '').catch(() => []) })
+  }
   if (name !== 'events' && name !== 'tournaments' && name !== 'calendar.ics') return NextResponse.json({ error: 'not found' }, { status: 404 })
 
   const data = await getEvents(), type = name === 'tournaments' ? 'tournament' : sp.get('type')
