@@ -83,13 +83,14 @@ async function lookup(userId: string, key: string, calendar: Calendar): Promise<
 async function ensureGame(userId: string, key: string): Promise<Ev | null> {
   const [have] = await q<GameRow>(`select ${GAME} from dd_game g where g.key = $1`, [key])
   if (have) return toEv(have)
-  const calendar = await getEvents()
+  // A cold calendar can take many seconds to build: wait for it briefly, then go straight to the game's own source
+  const calendar: Calendar = await Promise.race([getEvents(), new Promise<Calendar>((done) => setTimeout(done, 4000, { events: [], today: '', updated: '', stale: true, error: 'slow' }))])
   let ev: Ev | null = calendar.events.find((e) => e.id === key) ?? null
   if (!ev) {
     const found = await lookup(userId, key, calendar)
     if (found === 'gone') return null
     if (found === 'busy') throw new LibraryError(429, 'That is a lot of new games in an hour. Try again a little later.')
-    if (found === 'later') throw new LibraryError(502, 'The game data did not load. Try again in a minute.')
+    if (found === 'later') { console.error(`[dropdate] could not load ${key} from its source`); throw new LibraryError(502, 'The game data did not load. Try again in a minute.') }
     ev = found
   }
   await saveGames([ev])
@@ -156,6 +157,7 @@ export async function setFlag(userId: string, key: string, list: ListName, on: b
   if (on) {
     try { ev = await ensureGame(userId, key) } catch (e) {
       if (e instanceof LibraryError) throw e
+      console.error(`[dropdate] could not prepare ${key}:`, e instanceof Error ? e.message : e)
       throw new LibraryError(502, 'The game data did not load. Try again in a minute.')
     }
     if (!ev) throw new LibraryError(404, 'We could not find that game.')

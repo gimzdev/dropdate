@@ -451,7 +451,7 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
   // suggestions only when the query names a game: a pure filter ("ps5 next month") is answered by the grid
   const local = useMemo(() => (text.trim() ? search(events, query, today, { from: '0000-01-01', to: '9999-12-31' }).list.sort((a, b) => b.pop - a.pop).slice(0, 6) : []), [events, query, today, text])
   // titles the calendar lacks (older games) are looked up by name
-  const term = text.trim(), { found } = useLookup(term.length >= 3 && local.length < 6 ? term : '')
+  const term = text.trim(), { found } = useLookup(term.length >= 2 && local.length < 6 ? term : '')
   const hits = useMemo(() => {
     const seen = new Set(local.map((e) => e.slug))
     const more = (found ?? []).filter((g) => !seen.has(g.slug)).map((g): Ev => ({ id: `lookup-${g.slug}`, slug: g.slug, title: g.title, kind: 'release', start: g.released ?? '', thumb: g.thumb, shots: [], platforms: [], genres: [], pop: 0 }))

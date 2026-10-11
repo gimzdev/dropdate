@@ -13,16 +13,18 @@ const RAWG = env.RAWG_BASE || 'https://api.rawg.io/api', STEAM = env.STEAM_BASE 
 const HOUR = 3600, DAY = 86400
 
 /** JSON kept in Next's data cache. null: it does not exist (400/404/410); undefined: unreachable or refused (never taken for "missing"). Retries 429, 5xx and network errors once. */
-async function get<T>(url: string, revalidate = HOUR, headers?: Record<string, string>): Promise<T | null | undefined> {
+async function get<T>(url: string, revalidate = HOUR, headers?: Record<string, string>, tries = 2, timeout = 10000): Promise<T | null | undefined> {
   for (let attempt = 1; ; attempt++) {
+    const where = new URL(url)
     try {
-      const res = await fetch(url, { headers, next: { revalidate }, signal: AbortSignal.timeout(10000) })
+      const res = await fetch(url, { headers, next: { revalidate }, signal: AbortSignal.timeout(timeout) })
       if (res.ok) return (await res.json()) as T
       if ([400, 404, 410].includes(res.status)) return null
+      console.warn(`[dropdate] ${where.host}${where.pathname} answered ${res.status}`) // visible in the Vercel logs: why a game did not load
       if (res.status < 500 && res.status !== 429) return undefined
-    } catch {}
-    if (attempt === 2) return undefined
-    await new Promise((r) => setTimeout(r, 1500))
+    } catch (e) { console.warn(`[dropdate] ${where.host}${where.pathname} failed: ${e instanceof Error ? e.message : e}`) }
+    if (attempt >= tries) return undefined
+    await new Promise((r) => setTimeout(r, 1200 * attempt))
   }
 }
 /** Pages 1 to n, all at once (a page past the end is empty or a 404). */
@@ -139,10 +141,24 @@ async function rawgGame(slug: string): Promise<Game | null> {
 
 /** Any game RAWG knows by name: the search boxes fall back to this for older games. */
 export async function searchGames(q: string): Promise<Found[]> {
-  const key = env.RAWG_API_KEY
-  if (!key || q.trim().length < 2) return []
-  const res = await get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&search=${encodeURIComponent(q.trim().slice(0, 80))}&search_precise=true&page_size=8`)
-  return (res?.results ?? []).map((g) => ({ key: `rawg-${g.id}`, slug: g.slug, title: g.name, released: g.released ?? undefined, thumb: g.background_image ? rawgImg(g.background_image, 640) : '', metacritic: g.metacritic || undefined }))
+  const term = q.replace(/\s+/g, ' ').trim().slice(0, 80)
+  if (term.length < 2) return []
+  const key = env.RAWG_API_KEY, enc = encodeURIComponent(term)
+  // RAWG and Steam's store search side by side. No "search_precise": it only matches whole words, so "ba" or "zel" found nothing.
+  const [res, shop] = await Promise.all([
+    key ? get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&search=${enc}&page_size=12`) : undefined,
+    steamOn() ? get<{ items?: { id: number; name: string; type?: string; metascore?: string }[] }>(`${STEAM}/api/storesearch/?term=${enc}&l=english&cc=us`) : undefined,
+  ])
+  const out: Found[] = (res?.results ?? []).map((g) => ({ key: `rawg-${g.id}`, slug: g.slug, title: g.name, released: g.released ?? undefined, thumb: g.background_image ? rawgImg(g.background_image, 640) : '', metacritic: g.metacritic || undefined }))
+  const seen = new Set(out.map((f) => same(f.title)))
+  // Steam knows many games RAWG lacks. Its search gives no release date, so those are marked "undated": they may well be out.
+  for (const s of shop?.items ?? []) {
+    const title = clean(s.name ?? '')
+    if (!title || (s.type && s.type !== 'app') || seen.has(same(title))) continue
+    seen.add(same(title))
+    out.push({ key: `steam-${s.id}`, slug: kebab(`steam ${s.id} ${title}`), title, thumb: `https://cdn.cloudflare.steamstatic.com/steam/apps/${s.id}/header.jpg`, metacritic: Number(s.metascore) || undefined, undated: true })
+  }
+  return out.slice(0, 14)
 }
 
 // ── Browse: any game RAWG knows, a page at a time ──
@@ -340,12 +356,15 @@ export async function getEvents(): Promise<Payload> {
 export async function fromSource(key: string): Promise<Ev | null> {
   const [, src, id] = key.match(/^(rawg|steam)-(\d+)$/) ?? []
   if (src === 'rawg' && env.RAWG_API_KEY) {
-    const g = await get<Rawg>(`${RAWG}/games/${id}?key=${env.RAWG_API_KEY}`)
+    // RAWG's single-game endpoint is its slowest and flakiest one: three tries, up to 15 seconds each
+    const g = await get<Rawg>(`${RAWG}/games/${id}?key=${env.RAWG_API_KEY}`, HOUR, undefined, 3, 15000)
     if (g === undefined) throw new Error('RAWG is unreachable')
     const ev = g ? rawgEv(g, true) : null
     if (ev && g && !ev.metacritic && ev.start && ev.start <= iso(new Date()) && onSteam(g) && steamOn()) {
-      const app = steamAppOf(await rawgStores(id)), score = app ? await steamScore(app) : null
-      if (score) ev.metacritic = score
+      try { // a missing score must never stop a game from being saved
+        const app = steamAppOf(await rawgStores(id)), score = app ? await steamScore(app) : null
+        if (score) ev.metacritic = score
+      } catch {}
     }
     return ev
   }

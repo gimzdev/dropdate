@@ -12,7 +12,7 @@ export interface Ev {
   platforms: Platform[]; genres: string[]; rating?: number; metacritic?: number; pop: number; prize?: string; tba?: boolean
 }
 /** A game found by name among everything RAWG knows, calendar or not. */
-export interface Found { key: string; slug: string; title: string; released?: string; thumb: string; metacritic?: number }
+export interface Found { key: string; slug: string; title: string; released?: string; thumb: string; metacritic?: number; undated?: boolean } // undated: the source gives no date, the game may be out
 export interface Payload { events: Ev[]; today: string; updated: string; stale: boolean; error?: string; sources?: Record<string, number> }
 export interface Game {
   id: string; slug: string; name: string; description?: string; released?: string; website?: string; image?: string

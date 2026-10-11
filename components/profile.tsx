@@ -71,7 +71,7 @@ const ADD: Record<TabName, { label: string; placeholder: string; button: string 
 function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; has: (key: string) => boolean; onAdded: (e: Ev) => void }) {
   const [q, setQ] = useState(''), [adding, setAdding] = useState(''), [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null), field = useRef<HTMLInputElement>(null)
-  const term = q.trim(), { found: all, failed } = useLookup(term.length >= 2 ? term : ''), found = all?.slice(0, 8) ?? null
+  const term = q.trim(), { found: all, failed } = useLookup(term.length >= 2 ? term : ''), found = all?.slice(0, 12) ?? null
   useOutside(box, open, () => setOpen(false), true) // focusin, not blur: a click on a result must not close it first
   const shown = open && (failed || found !== null)
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -104,7 +104,7 @@ function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; 
               {found && found.length > 0 && (
                 <ul className="divide-y divide-line/10">
                   {found.map((f) => {
-                    const here = has(f.key), unreleased = list !== 'wishlist' && (!f.released || f.released > today)
+                    const here = has(f.key), unreleased = list !== 'wishlist' && !f.undated && (!f.released || f.released > today)
                     return (
                       <li key={f.key} className="flex items-center gap-3 px-3 py-2.5 sm:px-4">
                         {f.thumb ? <Img src={f.thumb} className="aspect-[16/10] w-16 rounded-md" /> : <span className="block aspect-[16/10] w-16 shrink-0 rounded-md bg-raised" />}

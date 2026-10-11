@@ -141,7 +141,13 @@ export async function setList(list: ListName, key: string, on: boolean): Promise
     if (state.phase !== 'in') return null // signed out while waiting its turn
     let message = 'Could not save that. Check your connection and try again.'
     try {
-      const res = await fetch('/api/library', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, list, on }) })
+      const send = () => fetch('/api/library', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, list, on }) })
+      let res = await send()
+      for (let again = 0; res.status === 502 && again < 2; again++) { // the game's source hiccuped: nothing was changed, so ask again
+        drop(res)
+        await new Promise((r) => setTimeout(r, 1500 * (again + 1)))
+        res = await send()
+      }
       if (res.status === 401) {
         drop(res)
         out()
