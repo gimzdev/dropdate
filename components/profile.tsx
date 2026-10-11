@@ -33,7 +33,7 @@ function Tile({ e, list, today, done }: { e: Ev; list: TabName; today: string; d
     if (done) return void setList('completed', e.id, false)
     setFresh(true)
     const saved = await setList('completed', e.id, true)
-    if (saved) notify(`${e.title} completed. Nice one.`)
+    if (saved) notify(`${e.title} completed.`)
     else setFresh(false)
   }
   return (

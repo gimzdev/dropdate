@@ -72,7 +72,7 @@ export function Progress({ id, title }: { id: string; title: string }) {
     await ready()
     if (!signedInNow()) return router.push(signInHref(path))
     const saved = await setList(list, id, on)
-    if (saved && list === 'completed' && on) notify(`${title} completed. Nice one.`)
+    if (saved && list === 'completed' && on) notify(`${title} completed.`)
   }
   const part = (on: boolean) => `btn ${on ? 'bg-go/20 text-go ring-1 ring-go/50 ring-inset hover:bg-go/30' : 'btn-glass'}`
   return (
