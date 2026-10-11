@@ -42,7 +42,6 @@ function Tile({ e, list, today, done }: { e: Ev; list: TabName; today: string; d
         <div className={`relative aspect-[16/10] overflow-hidden rounded-art bg-raised transition ${played && done ? 'ring-2 ring-go/70 ring-inset' : ''}`}>
           <Thumb e={e} className="h-full w-full transition duration-500 group-hover:scale-[1.03]" />
           {!!e.metacritic && <Score n={e.metacritic} className="absolute bottom-2.5 left-2.5" />}
-          {played && done && <span key="done" className="absolute top-2.5 left-2.5 inline-flex animate-pop items-center gap-1 rounded-full bg-go px-2.5 py-1 text-[12px] font-bold text-black"><Icon name="check" className="h-3 w-3" stroke={3} />Completed</span>}
         </div>
         <div className="mt-3 flex gap-3">
           {!played && !!e.start && <div className="max-[359px]:hidden"><DateBlock start={e.start} tba={e.tba} /></div>}
