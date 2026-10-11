@@ -22,11 +22,13 @@ export default async function Home() {
   const releases = events.filter((e) => e.kind === 'release'), ahead = releases.filter((e) => e.start >= today)
   const soon = ahead.filter((e) => gap(today, e.start) <= 120)
 
-  const hero = [...(soon.length >= 3 ? soon : ahead)].sort(hype).slice(0, 5), shown = new Set(hero.map((e) => e.id))
+  const hasArt = (e: Ev) => !!(big.get(e.id) || e.thumb)
+  const hero = [...(soon.length >= 3 ? soon : ahead)].filter(hasArt).sort(hype).slice(0, 5), shown = new Set(hero.map((e) => e.id))
   // The week works out the visitor's own today in the browser, so it gets a day either side
   const week = events.filter((e) => e.start >= shift(today, -1) && e.start <= shift(today, 7))
   const later = ahead.filter((e) => e.start > today && !shown.has(e.id)), year = later.filter((e) => gap(today, e.start) <= 365)
-  const [lead, ...anticipated] = [...(year.length >= 6 ? year : later)].sort(hype).slice(0, 11)
+  const ranked = [...(year.length >= 6 ? year : later)].sort(hype).slice(0, 11)
+  const [lead] = ranked.splice(Math.max(0, ranked.findIndex(hasArt)), 1), anticipated = ranked // the big tile is the first with artwork
   const fresh = releases.filter((e) => e.start < today && gap(e.start, today) <= 30).sort(hype).slice(0, 10)
   const cups = events.filter((e) => e.kind === 'tournament' && (e.end ?? e.start) >= today).sort(hype).slice(0, 10).sort((a, b) => a.start.localeCompare(b.start))
 

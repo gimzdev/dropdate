@@ -63,7 +63,7 @@ const names = (l?: { name: string }[]) => (l ?? []).map((x) => x.name)
 
 /** A RAWG game as a calendar entry: lists need a date and artwork, a single saved game does not. */
 function rawgEv(g: Rawg, lenient = false): Ev | null {
-  if (!lenient && (!g.released || !g.background_image)) return null
+  if (!lenient && (!g.released || (!g.background_image && (g.added ?? 0) < 300))) return null // a big game without artwork yet (GTA VI, say) still belongs on the calendar
   const platforms = [...new Set((g.parent_platforms ?? []).map((p) => PLAT[p.platform.slug]).filter(Boolean))]
   return {
     id: `rawg-${g.id}`, slug: g.slug, title: g.name, kind: 'release', start: g.released ?? '', tba: g.tba || undefined,
@@ -77,13 +77,27 @@ const RAWG_STEAM = 1 // the id RAWG gives the Steam store
 const onSteam = (g: Rawg) => !!g.stores?.some((s) => s.store.id === RAWG_STEAM)
 
 /** `steamy` collects the games RAWG lists on Steam: where a missing score can be found. */
-async function rawg(dates: string, max: number, steamy: Set<string>): Promise<Ev[]> {
+async function rawg(dates: string, max: number, steamy: Set<string>, revalidate = HOUR): Promise<Ev[]> {
   const key = env.RAWG_API_KEY
   if (!key) return []
-  const all = await pages(max, (p) => get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&dates=${dates}&ordering=-added&page_size=40&page=${p}`))
+  const all = await pages(max, (p) => get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&dates=${dates}&ordering=-added&page_size=40&page=${p}`, revalidate))
   const games = all.flatMap((r) => r?.results ?? [])
   for (const g of games) if (onSteam(g)) steamy.add(`rawg-${g.id}`)
   return games.flatMap((g) => rawgEv(g) ?? [])
+}
+
+/**
+ * Everything RAWG lists as coming in the next two years, in three windows. One list of the 200 most followed would let the next
+ * months' games be crowded out by far-off ones: here each period keeps its own most followed. The far windows change slowly and
+ * are asked every six hours, which keeps the total below what one list asked hourly used to cost.
+ */
+async function upcomingGames(today: string, steamy: Set<string>): Promise<Ev[]> {
+  const lists = await Promise.all([
+    rawg(`${today},${shift(today, 120)}`, 4, steamy),
+    rawg(`${shift(today, 121)},${shift(today, 300)}`, 3, steamy, 6 * HOUR),
+    rawg(`${shift(today, 301)},${shift(today, 730)}`, 3, steamy, 6 * HOUR),
+  ])
+  return lists.flat()
 }
 
 // ── Metacritic scores from Steam (RAWG has none for the last couple of years; Steam's store pages do) ──
@@ -343,7 +357,7 @@ async function load() {
   const today = iso(new Date())
   const steamy = new Set<string>()
   const [upcoming, recent, wished, soon, sports] = await Promise.all([
-    safe(rawg(`${today},${shift(today, 730)}`, 5, steamy)), safe(rawg(`${shift(today, -60)},${shift(today, -1)}`, 4, steamy)),
+    safe(upcomingGames(today, steamy)), safe(rawg(`${shift(today, -60)},${shift(today, -1)}`, 4, steamy)),
     safe(steamList('popularwishlist', 1500)), safe(steamList('popularcomingsoon', 600)), safe(esports()),
   ])
   const releases = [...new Map([...upcoming, ...recent].map((e) => [e.id, e])).values()]
