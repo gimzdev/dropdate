@@ -81,7 +81,7 @@ const ADD: Record<TabName, { label: string; placeholder: string; button: string 
 function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; has: (key: string) => boolean; onAdded: (e: Ev) => void }) {
   const [q, setQ] = useState(''), [adding, setAdding] = useState(''), [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null), field = useRef<HTMLInputElement>(null)
-  const term = q.trim(), { found: all, failed } = useLookup(term.length >= 2 ? term : ''), found = all?.slice(0, 12) ?? null
+  const term = q.trim(), { found: all, failed } = useLookup(term.length >= 2 ? term : ''), found = all?.slice(0, 20) ?? null
   useOutside(box, open, () => setOpen(false), true) // focusin, not blur: a click on a result must not close it first
   const shown = open && (failed || found !== null)
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {

@@ -117,6 +117,39 @@ export function afterChange(f: Flags, list: ListName, on: boolean): Flags {
 /** A same-site path to return to after signing in, or the fallback. No //, backslashes, control characters or non-ASCII ("/<tab>/evil" is "//evil"). */
 export const safeNext = (n?: string | null, fallback = '/profile') => (n && /^\/(?![/\\])(?!signin(?:[/?#]|$))[^\x00-\x20\x7f-\uffff\\]*$/.test(n) ? n : fallback)
 
+// ── Abbreviations: what people type for a series ("gta", "cod", "botw") and what it is called ──
+
+export const FRANCHISES: Record<string, string> = {
+  gta: 'grand theft auto', gtav: 'grand theft auto v', gtasa: 'grand theft auto san andreas', cod: 'call of duty', rdr: 'red dead redemption', tlou: 'the last of us',
+  botw: 'the legend of zelda breath of the wild', totk: 'the legend of zelda tears of the kingdom', loz: 'the legend of zelda', zelda: 'the legend of zelda',
+  ac: 'assassins creed', ff: 'final fantasy', ffxiv: 'final fantasy xiv', re: 'resident evil', mgs: 'metal gear solid', nfs: 'need for speed', lol: 'league of legends',
+  cs: 'counter strike', csgo: 'counter strike global offensive', wow: 'world of warcraft', dbd: 'dead by daylight', ssb: 'super smash bros', smash: 'super smash bros',
+  mk: 'mortal kombat', sf: 'street fighter', bf: 'battlefield', gow: 'god of war', hzd: 'horizon zero dawn', dmc: 'devil may cry', lotr: 'the lord of the rings',
+  kh: 'kingdom hearts', dq: 'dragon quest', smb: 'super mario bros', mc: 'minecraft', hk: 'hollow knight', ds: 'dark souls', er: 'elden ring', bg: 'baldurs gate',
+  tw: 'total war', fm: 'football manager', pes: 'pro evolution soccer', hl: 'half life', l4d: 'left 4 dead', tf: 'team fortress', ow: 'overwatch', sw: 'star wars',
+  kotor: 'star wars knights of the old republic', me: 'mass effect', da: 'dragon age', tes: 'the elder scrolls', eso: 'the elder scrolls online', fo: 'fallout',
+  bl: 'borderlands', farcry: 'far cry', sh: 'silent hill', pd: 'payday', wd: 'watch dogs', pkmn: 'pokemon', cp: 'cyberpunk', sm: 'super mario', dkc: 'donkey kong country',
+  ttt: 'tony hawk', thps: 'tony hawk pro skater', fnaf: 'five nights at freddys', nms: 'no mans sky', mhw: 'monster hunter world', mh: 'monster hunter', ys: 'ys',
+}
+const ROMANS = ['', 'i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x']
+/** The ways a name may be written: as typed, in full ("gta 5" is "grand theft auto 5" and "grand theft auto v"). The first is what was typed. */
+export function expandQuery(q: string): string[] {
+  const typed = q.replace(/\s+/g, ' ').trim()
+  const t = typed.toLowerCase().replace(/['’]/g, '').replace(/[^a-z0-9]+/g, ' ').trim().replace(/^([a-z]+)(\d{1,2})$/, '$1 $2') // gta5 is gta 5
+  const [head = '', ...rest] = t.split(' '), full = FRANCHISES[head], out = new Set<string>([typed])
+  if (full) {
+    const tail = rest.join(' '), n = /^\d{1,2}$/.test(tail) ? +tail : 0, r = ROMANS.indexOf(tail)
+    if (!tail) out.add(full)
+    else {
+      out.add(`${full} ${tail}`)
+      if (n >= 1 && n <= 10) out.add(`${full} ${ROMANS[n]}`)
+      if (r > 0) out.add(`${full} ${r}`)
+      out.add(full)
+    }
+  }
+  return [...out].filter(Boolean)
+}
+
 // ── Browse: every game RAWG knows, filtered and in pages ──
 
 /** RAWG's genres: [the name in its address, the name shown]. */

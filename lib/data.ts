@@ -5,7 +5,7 @@
 
 import { unstable_cache } from 'next/cache'
 import { cache } from 'react'
-import { type BrowseQuery, type Ev, type Found, type Game, type Payload, type Platform, BROWSE_PAGE, BROWSE_PAGES, iso, lite, shift } from './core'
+import { type BrowseQuery, type Ev, type Found, type Game, type Payload, type Platform, BROWSE_PAGE, BROWSE_PAGES, expandQuery, iso, lite, shift } from './core'
 import { allow } from './limit'
 
 const env = process.env
@@ -139,26 +139,49 @@ async function rawgGame(slug: string): Promise<Game | null> {
   }
 }
 
-/** Any game RAWG knows by name: the search boxes fall back to this for older games. */
+/** Titles compared the way people read them: no case, accents, apostrophes or punctuation. */
+const fold = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ'’]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+/** How well a title answers what was typed, under any of its spellings: the exact name, its start, or all of its words. */
+function relevance(title: string, variants: string[]) {
+  const t = fold(title), words = t.split(' ')
+  let best = 0
+  for (const v of variants) {
+    const f = fold(v)
+    if (!f) continue
+    const score = t === f ? 100 : t.startsWith(f) ? 70 : f.split(' ').every((x) => words.some((w) => w.startsWith(x))) ? 40 : 0
+    if (score > best) best = score
+  }
+  return best
+}
+
+/** Any game by name: the search boxes use this. RAWG and Steam's store are both asked, under every spelling of the name. */
 export async function searchGames(q: string): Promise<Found[]> {
   const term = q.replace(/\s+/g, ' ').trim().slice(0, 80)
   if (term.length < 2) return []
-  const key = env.RAWG_API_KEY, enc = encodeURIComponent(term)
-  // RAWG and Steam's store search side by side. No "search_precise": it only matches whole words, so "ba" or "zel" found nothing.
-  const [res, shop] = await Promise.all([
-    key ? get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&search=${enc}&page_size=12`) : undefined,
-    steamOn() ? get<{ items?: { id: number; name: string; type?: string; metascore?: string }[] }>(`${STEAM}/api/storesearch/?term=${enc}&l=english&cc=us`) : undefined,
+  const key = env.RAWG_API_KEY, variants = expandQuery(term).slice(0, 3), enc = encodeURIComponent
+  // "gta" is asked as typed and as "grand theft auto": the series by popularity, so its main games come first
+  const [rawgs, shops] = await Promise.all([
+    Promise.all(variants.map((v, i) => (key ? get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&search=${enc(v)}&page_size=${i ? 30 : 12}${i ? '&ordering=-added' : ''}`) : undefined))),
+    Promise.all(variants.slice(0, 2).map((v) => (steamOn() ? get<{ items?: { id: number; name: string; type?: string; metascore?: string }[] }>(`${STEAM}/api/storesearch/?term=${enc(v)}&l=english&cc=us`) : undefined))),
   ])
-  const out: Found[] = (res?.results ?? []).map((g) => ({ key: `rawg-${g.id}`, slug: g.slug, title: g.name, released: g.released ?? undefined, thumb: g.background_image ? rawgImg(g.background_image, 640) : '', metacritic: g.metacritic || undefined }))
-  const seen = new Set(out.map((f) => same(f.title)))
-  // Steam knows many games RAWG lacks. Its search gives no release date, so those are marked "undated": they may well be out.
-  for (const s of shop?.items ?? []) {
-    const title = clean(s.name ?? '')
-    if (!title || (s.type && s.type !== 'app') || seen.has(same(title))) continue
-    seen.add(same(title))
-    out.push({ key: `steam-${s.id}`, slug: kebab(`steam ${s.id} ${title}`), title, thumb: `https://cdn.cloudflare.steamstatic.com/steam/apps/${s.id}/header.jpg`, metacritic: Number(s.metascore) || undefined, undated: true })
+  const found = new Map<string, { f: Found; rel: number; score: number }>(), seen = new Set<string>()
+  for (const g of rawgs.flatMap((r) => r?.results ?? [])) {
+    const id = `rawg-${g.id}`
+    if (found.has(id)) continue
+    const rel = relevance(g.name, variants), pop = Math.min(30, Math.log10(1 + (g.added ?? 0)) * 8)
+    found.set(id, { rel, score: rel + pop, f: { key: id, slug: g.slug, title: g.name, released: g.released ?? undefined, thumb: g.background_image ? rawgImg(g.background_image, 640) : '', metacritic: g.metacritic || undefined } })
+    seen.add(same(g.name))
   }
-  return out.slice(0, 14)
+  // Steam knows many games RAWG lacks. Its search gives no release date, so those are marked "undated": they may well be out.
+  for (const s of shops.flatMap((r) => r?.items ?? [])) {
+    const title = clean(s.name ?? ''), id = `steam-${s.id}`
+    if (!title || (s.type && s.type !== 'app') || found.has(id) || seen.has(same(title))) continue
+    seen.add(same(title))
+    const rel = relevance(title, variants)
+    found.set(id, { rel, score: rel, f: { key: id, slug: kebab(`steam ${s.id} ${title}`), title, thumb: `https://cdn.cloudflare.steamstatic.com/steam/apps/${s.id}/header.jpg`, metacritic: Number(s.metascore) || undefined, undated: true } })
+  }
+  const all = [...found.values()], good = all.filter((x) => x.rel > 0) // fuzzy matches that share nothing with the name only fill in when little else was found
+  return (good.length >= 5 ? good : all).sort((a, b) => b.score - a.score).slice(0, 24).map((x) => x.f)
 }
 
 // ── Browse: any game RAWG knows, a page at a time ──
@@ -179,7 +202,7 @@ function browseUrl(q: BrowseQuery, today: string) {
   if (q.platform) p.set('parent_platforms', FAMILY[q.platform])
   if (q.genre) p.set('genres', q.genre)
   if (q.sort === 'score') p.set('metacritic', '1,100')
-  if (q.q) p.set('search', q.q)
+  if (q.q) { const v = expandQuery(q.q); p.set('search', v.length > 1 ? v[1] : q.q) } // "gta" browses Grand Theft Auto
   return `${RAWG}/games?${p}`
 }
 

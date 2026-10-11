@@ -1,7 +1,7 @@
 // Smart search, shared by the calendar in the browser and the API: plain-English filters, then typo-tolerant text.
 // Its own module so that only the pages with a search box download it.
 
-import { type Ev, type Kind, type Platform, iso, monthLabel, shift, toDate } from './core'
+import { type Ev, FRANCHISES, type Kind, type Platform, iso, monthLabel, shift, toDate } from './core'
 
 export interface Chip { label: string; raw: string }
 interface Parsed { kinds: Kind[]; platforms: Platform[]; range?: [string, string]; past: boolean; text: string; chips: Chip[] }
@@ -117,7 +117,7 @@ function hit(e: Ev, words: string[]) {
   const h = hay(e)
   return words.every((w) => {
     const max = w.length > 7 ? 2 : 1
-    return h.hay.includes(w) || (ALIASES[w] && h.hay.includes(ALIASES[w])) || (w.length > 1 && h.initials.includes(w)) || (w.length > 3 && h.parts.some((p) => dist(w, p, max) <= max || dist(w, p.slice(0, w.length), 1) <= 1))
+    return h.hay.includes(w) || (ALIASES[w] && h.hay.includes(ALIASES[w])) || (FRANCHISES[w] && h.hay.includes(FRANCHISES[w])) || (w.length > 1 && h.initials.includes(w)) || (w.length > 3 && h.parts.some((p) => dist(w, p, max) <= max || dist(w, p.slice(0, w.length), 1) <= 1))
   })
 }
 

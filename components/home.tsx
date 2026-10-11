@@ -455,7 +455,7 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
   const hits = useMemo(() => {
     const seen = new Set(local.map((e) => e.slug))
     const more = (found ?? []).filter((g) => !seen.has(g.slug)).map((g): Ev => ({ id: `lookup-${g.slug}`, slug: g.slug, title: g.title, kind: 'release', start: g.released ?? '', thumb: g.thumb, shots: [], platforms: [], genres: [], pop: 0 }))
-    return [...local, ...more].slice(0, 8)
+    return [...local, ...more].slice(0, 10)
   }, [local, found])
   useEffect(() => setActive(-1), [value])
   const open = (e: Ev) => (e.slug ? router.push(href(e)) : e.url && window.open(e.url, '_blank', 'noopener'))
