@@ -90,7 +90,7 @@ async function ensureGame(userId: string, key: string): Promise<Ev | null> {
     const found = await lookup(userId, key, calendar)
     if (found === 'gone') return null
     if (found === 'busy') throw new LibraryError(429, 'That is a lot of new games in an hour. Try again a little later.')
-    if (found === 'later') { console.error(`[dropdate] could not load ${key} from its source`); throw new LibraryError(502, 'The game data did not load. Try again in a minute.') }
+    if (found === 'later') { throw new LibraryError(502, 'The game data did not load. Try again in a minute.') }
     ev = found
   }
   await saveGames([ev])
@@ -157,7 +157,6 @@ export async function setFlag(userId: string, key: string, list: ListName, on: b
   if (on) {
     try { ev = await ensureGame(userId, key) } catch (e) {
       if (e instanceof LibraryError) throw e
-      console.error(`[dropdate] could not prepare ${key}:`, e instanceof Error ? e.message : e)
       throw new LibraryError(502, 'The game data did not load. Try again in a minute.')
     }
     if (!ev) throw new LibraryError(404, 'We could not find that game.')

@@ -28,6 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://media.rawg.io" />
+        <link rel="preconnect" href="https://images.igdb.com" />
         <link rel="preconnect" href="https://shared.akamai.steamstatic.com" />
         {ACCOUNTS && <script dangerouslySetInnerHTML={{ __html: SIGNED }} />}
       </head>

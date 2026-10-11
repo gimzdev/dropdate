@@ -48,7 +48,7 @@ export default async function GamePage({ params }: Props) {
   ])
   const details = filled([
     ['Average playtime', g.playtime ? `${g.playtime} hours` : ''],
-    ['Metacritic', g.metacritic ? `${g.metacritic} out of 100` : 'No score yet'],
+    [g.scoreFrom ? 'Critics (IGDB)' : 'Metacritic', g.metacritic ? `${g.metacritic} out of 100` : 'No score yet'],
     ['RAWG rating', g.rating ? `${g.rating.toFixed(1)} out of 5` : ''],
     ['Age rating', g.esrb ?? ''],
   ])
@@ -72,7 +72,7 @@ export default async function GamePage({ params }: Props) {
               <h1 className="display mt-6 max-w-[18ch] text-[clamp(2.75rem,3.4vw+1.6rem,5.25rem)]">{g.name}</h1>
               <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2.5">
                 {st && !upcoming && <span className={`text-[15px] font-semibold ${st.tone === 'live' ? 'text-go' : 'text-white/75'}`}>{st.label}</span>}
-                {!!g.metacritic && <span title="Metacritic score" className={`tag text-[13px] ${scoreTone(g.metacritic)}`}>{g.metacritic} Metacritic</span>}
+                {!!g.metacritic && <span title={g.scoreFrom ? 'Average of critics’ reviews, from IGDB' : 'Metacritic score'} className={`tag text-[13px] ${scoreTone(g.metacritic)}`}>{g.metacritic} {g.scoreFrom ? 'Critics' : 'Metacritic'}</span>}
                 {g.esrb && <span className="rounded-full px-2.5 py-0.5 text-[13px] font-medium ring-1 ring-white/30 ring-inset">{g.esrb}</span>}
                 {g.genres.length > 0 && <span className="text-[15px] text-white/65">{g.genres.slice(0, 3).join(', ')}</span>}
               </div>

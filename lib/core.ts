@@ -16,7 +16,7 @@ export interface Found { key: string; slug: string; title: string; released?: st
 export interface Payload { events: Ev[]; today: string; updated: string; stale: boolean; error?: string; sources?: Record<string, number> }
 export interface Game {
   id: string; slug: string; name: string; description?: string; released?: string; website?: string; image?: string
-  rating?: number; metacritic?: number; esrb?: string; playtime?: number; trailer?: { preview: string; src: string }
+  rating?: number; metacritic?: number; scoreFrom?: string; esrb?: string; playtime?: number; trailer?: { preview: string; src: string }
   genres: string[]; tags: string[]; platforms: string[]; developers: string[]; publishers: string[]; screenshots: string[]; stores: { name: string; url: string }[]
 }
 
@@ -60,6 +60,7 @@ export const scoreTone = (n: number) => (n >= 75 ? 'bg-emerald-500 text-black' :
 /** Smaller renditions of large artwork, for srcset: RAWG resizes, Steam screenshot sizes. */
 export function srcSet(u?: string) {
   if (u?.includes('/resize/1920/-/')) return [640, 1280, 1920].map((w) => `${u.replace('/1920/', `/${w}/`)} ${w}w`).join(', ')
+  if (u?.includes('/t_1080p/')) return `${u.replace('/t_1080p/', '/t_screenshot_big/')} 889w, ${u.replace('/t_1080p/', '/t_720p/')} 1280w, ${u} 1920w`
   if (u?.includes('.1920x1080.')) return `${u.replace('.1920x1080.', '.600x338.')} 600w, ${u} 1920w`
 }
 
@@ -103,8 +104,8 @@ export type ListName = (typeof LISTS)[number]
 /** The two lists the profile shows. */
 export const TABS = ['wishlist', 'played'] as const
 export type TabName = (typeof TABS)[number]
-/** How the calendar names a game or tournament: rawg-123, steam-456, ps-789. */
-export const GAME_KEY = /^(?:rawg|steam|ps)-\d{1,12}$/
+/** How the calendar names a game or tournament: rawg-123, steam-456, igdb-321, ps-789. */
+export const GAME_KEY = /^(?:rawg|steam|igdb|ps)-\d{1,12}$/
 export interface Flags { wishlist: boolean; played: boolean; completed: boolean }
 /** A game in someone's library: its details, and when they wishlisted, played and completed it. */
 export interface LibItem { ev: Ev; wishlisted?: string; played?: string; completed?: string }

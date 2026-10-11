@@ -38,7 +38,7 @@ export default function Legal() {
           {ACCOUNTS && (
             <>
               <p><strong>Accounts</strong> are free and for people aged 16 or older. One account is one email address. Your lists are yours: Dropdate does not show them to anyone else. You can delete the account whenever you like, and we may close one that is used to abuse the service.</p>
-              <p><strong>Metacritic scores</strong> are shown as reported by RAWG and Steam. Metacritic is a trademark of its owner, and Dropdate is not affiliated with it.</p>
+              <p><strong>Metacritic scores</strong> are shown as reported by RAWG and Steam. Where a game has none, the average of critics’ reviews from IGDB may be shown instead, and is labelled as such on the game’s page. Metacritic is a trademark of its owner, and Dropdate is not affiliated with it.</p>
             </>
           )}
         </div>
@@ -78,7 +78,7 @@ export default function Legal() {
                 <li className={li}><strong><A to="https://resend.com/legal/privacy-policy">Resend</A></strong> delivers the sign-in email, so it sees your email address and the code, and keeps its own delivery logs for a short time.</li>
                 <li className={li}><strong>Google or Discord</strong>, only if you choose to sign in with them.</li>
                 <li className={li}><strong>Your calendar app</strong>, only if you subscribe it to your wishlist link.</li>
-                <li className={li}><strong><A to="https://rawg.io">RAWG</A>, <A to="https://store.steampowered.com">Steam</A> and <A to="https://pandascore.co">PandaScore</A></strong> supply game and esports data. Your browser loads artwork straight from their servers, which can see your IP address, like any website you visit. Nothing about your account goes to them. When you search for a game by name, the words you typed go from our server to RAWG, without your address.</li>
+                <li className={li}><strong><A to="https://rawg.io">RAWG</A>, <A to="https://store.steampowered.com">Steam</A> and <A to="https://pandascore.co">PandaScore</A>, and <A to="https://www.igdb.com">IGDB</A> (run by Twitch) where it is switched on</strong> supply game and esports data. Your browser loads artwork straight from their servers, which can see your IP address, like any website you visit. Nothing about your account goes to them. When you search for a game by name, the words you typed go from our server to RAWG (and IGDB, where switched on), without your address.</li>
               </ul>
               <p>Some of these companies work in the United States and elsewhere, and rely on the safeguards the law allows, such as standard contractual clauses, when data travels.</p>
             </div>
@@ -104,7 +104,7 @@ export default function Legal() {
             <p><strong>No accounts.</strong> Dropdate never asks for or stores personal information.</p>
             <p><strong>On your device.</strong> Your saved list lives in your browser’s local storage and never leaves it. Your search is kept in the page address so you can share it.</p>
             <p><strong>Server logs.</strong> The hosting provider may keep standard request logs, such as IP addresses, for security and operations.</p>
-            <p><strong>Third parties.</strong> Game data and artwork come from <A to="https://rawg.io">RAWG</A> and <A to="https://store.steampowered.com">Steam</A>, esports data from <A to="https://pandascore.co">PandaScore</A>. Your browser loads images straight from their servers. When you search for a game by name, the words you typed go from our server to RAWG, without your address. Game names, logos and images belong to their owners.</p>
+            <p><strong>Third parties.</strong> Game data and artwork come from <A to="https://rawg.io">RAWG</A> and <A to="https://store.steampowered.com">Steam</A>, esports data from <A to="https://pandascore.co">PandaScore</A>, and more game data and critics’ scores from <A to="https://www.igdb.com">IGDB</A> where it is switched on. Your browser loads images straight from their servers. When you search for a game by name, the words you typed go from our server to RAWG, without your address. Game names, logos and images belong to their owners.</p>
           </div>
         </DocSection>
       )}

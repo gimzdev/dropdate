@@ -65,7 +65,7 @@ export function Footer() {
         ))}
       </div>
       <div className="wrap flex flex-col justify-between gap-3 border-t border-line/10 py-6 text-[13px] text-dim sm:flex-row">
-        <p>Game data, artwork and Metacritic scores from <A to="https://rawg.io" className={credit}>RAWG</A> and <A to="https://store.steampowered.com" className={credit}>Steam</A>, esports from <A to="https://pandascore.co" className={credit}>PandaScore</A>. Names, scores and images belong to their owners.</p>
+        <p>Game data, artwork and Metacritic scores from <A to="https://rawg.io" className={credit}>RAWG</A> {process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET ? ', ' : ' and '}<A to="https://store.steampowered.com" className={credit}>Steam</A>{process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET ? <>{' '}and <A to="https://www.igdb.com" className={credit}>IGDB</A></> : null}, esports from <A to="https://pandascore.co" className={credit}>PandaScore</A>. Names, scores and images belong to their owners.</p>
         <p className="shrink-0">© {new Date().getFullYear()} Dropdate</p>
       </div>
     </footer>
