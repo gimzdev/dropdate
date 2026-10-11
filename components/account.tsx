@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { type RefObject, useEffect, useRef, useState } from 'react'
-import { dismiss, ready, setList, signOut, signedInNow, useAccount, useNotice } from '@/lib/account'
+import { dismiss, notify, ready, setList, signOut, signedInNow, useAccount, useNotice } from '@/lib/account'
 import { Icon } from './icons'
 
 // What the browser shows of an account: the header control, the Played and Completed buttons of a game, and the short messages.
@@ -71,7 +71,8 @@ export function Progress({ id, title }: { id: string; title: string }) {
   const click = async (list: 'played' | 'completed', on: boolean) => {
     await ready()
     if (!signedInNow()) return router.push(signInHref(path))
-    void setList(list, id, on)
+    const saved = await setList(list, id, on)
+    if (saved && list === 'completed' && on) notify(`${title} completed. Nice one.`)
   }
   const part = (on: boolean) => `btn ${on ? 'bg-go/20 text-go ring-1 ring-go/50 ring-inset hover:bg-go/30' : 'btn-glass'}`
   return (
@@ -82,7 +83,7 @@ export function Progress({ id, title }: { id: string; title: string }) {
       </button>
       <button type="button" onClick={() => void click('completed', !done)} aria-pressed={done} title={done ? 'You have completed this' : 'Mark as completed'} aria-label={`Completed: ${title}`}
         className={`${part(done)} -ml-px rounded-l-none pl-4`}>
-        <Icon name={done ? 'check' : 'flag'} />Completed
+        <span key={String(done)} className={`inline-flex ${done ? 'animate-pop' : ''}`}><Icon name={done ? 'check' : 'flag'} /></span>Completed
       </button>
     </div>
   )

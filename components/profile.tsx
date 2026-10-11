@@ -20,19 +20,29 @@ function wishlistOrder(list: Ev[], today: string) {
   return [...list].sort((a, b) => rank(a) - rank(b) || (rank(a) === 2 ? b.start.localeCompare(a.start) : (a.start || '9').localeCompare(b.start || '9') || a.title.localeCompare(b.title)))
 }
 
-/** A game as a card: artwork, score and corner buttons, then the date (wishlist), title and platforms. */
+/** A game as a card: artwork, score and badges, then the date (wishlist), title and platforms. A played game has its own "Completed" button. */
 function Tile({ e, list, today, done }: { e: Ev; list: TabName; today: string; done: boolean }) {
   const esport = e.kind === 'tournament', out = !esport && !!e.start && e.start <= today, played = list === 'played'
+  const [fresh, setFresh] = useState(false) // for a moment after completing: the soft green pulse
+  useEffect(() => { if (!fresh) return; const t = setTimeout(() => setFresh(false), 1100); return () => clearTimeout(t) }, [fresh])
   const s = e.start ? status(e, today) : null
   const when = !e.start ? 'No date yet' : e.tba && e.start > today ? 'Date to be announced' : s!.label
   const meta = (played ? [e.start ? e.start.slice(0, 4) : '', platforms(e)] : [platforms(e) || e.genres[0]]).filter(Boolean) // separate items: narrow cards wrap between them
   const remove = played ? 'Remove from the games you have played' : 'Remove from your wishlist'
+  const finish = async () => {
+    if (done) return void setList('completed', e.id, false)
+    setFresh(true)
+    const saved = await setList('completed', e.id, true)
+    if (saved) notify(`${e.title} completed. Nice one.`)
+    else setFresh(false)
+  }
   return (
     <li className="group relative">
-      <Open e={e} className="block rounded-art">
-        <div className="relative aspect-[16/10] overflow-hidden rounded-art bg-raised">
+      <Open e={e} className={`block rounded-art transition-shadow ${fresh ? 'animate-done' : ''}`}>
+        <div className={`relative aspect-[16/10] overflow-hidden rounded-art bg-raised transition ${played && done ? 'ring-2 ring-go/70 ring-inset' : ''}`}>
           <Thumb e={e} className="h-full w-full transition duration-500 group-hover:scale-[1.03]" />
           {!!e.metacritic && <Score n={e.metacritic} className="absolute bottom-2.5 left-2.5" />}
+          {played && done && <span key="done" className="absolute top-2.5 left-2.5 inline-flex animate-pop items-center gap-1 rounded-full bg-go px-2.5 py-1 text-[12px] font-bold text-black"><Icon name="check" className="h-3 w-3" stroke={3} />Completed</span>}
         </div>
         <div className="mt-3 flex gap-3">
           {!played && !!e.start && <div className="max-[359px]:hidden"><DateBlock start={e.start} tba={e.tba} /></div>}
@@ -45,15 +55,16 @@ function Tile({ e, list, today, done }: { e: Ev; list: TabName; today: string; d
           </div>
         </div>
       </Open>
+      {played && !esport && (
+        <button type="button" onClick={() => void finish()} aria-pressed={done} aria-label={`Completed: ${e.title}`} title={done ? 'Completed. Tap to undo' : 'Mark as completed'}
+          className={`mt-3 inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-semibold transition active:scale-[.97] ${done ? 'bg-go/15 text-go ring-1 ring-go/40 ring-inset hover:bg-go/25' : 'text-muted ring-1 ring-line/15 ring-inset hover:text-fg hover:ring-line/30'}`}>
+          <span key={String(done)} className={`inline-flex ${done ? 'animate-pop' : ''}`}><Icon name={done ? 'check' : 'flag'} className="h-4 w-4" stroke={done ? 3 : 2} /></span>{done ? 'Completed' : 'Mark as completed'}
+        </button>
+      )}
       <div className="absolute top-2.5 right-2.5 flex gap-1.5">
         {!played && out && (
           <button type="button" title="I have played this" aria-label={`Mark ${e.title} as played`} className={`${corner} hover:bg-go hover:text-black`}
             onClick={async () => { if (await setList('played', e.id, true)) notify(`${e.title} moved to the games you have played.`) }}><Icon name="pad" /></button>
-        )}
-        {played && !esport && (
-          <button type="button" aria-pressed={done} title={done ? 'Completed. Tap to undo' : 'Mark as completed'} aria-label={`Completed: ${e.title}`}
-            className={done ? 'grid h-10 w-10 place-items-center rounded-full bg-go text-black transition hover:bg-go/85' : corner}
-            onClick={() => void setList('completed', e.id, !done)}><Icon name={done ? 'check' : 'flag'} /></button>
         )}
         <button type="button" title={remove} aria-label={`${remove}: ${e.title}`} className={corner} onClick={() => void setList(played ? 'played' : 'wishlist', e.id, false)}><Icon name="close" /></button>
       </div>
@@ -171,7 +182,7 @@ const EMPTY = {
 export function Profile({ user, items, today: serverToday }: { user: { email: string; since: string }; items: LibItem[]; today: string }) {
   const router = useRouter(), params = useSearchParams(), today = useToday(serverToday), account = useAccount()
   const wanted: TabName = TABS.find((l) => l === params.get('tab')) ?? 'wishlist'
-  const [tab, setTab] = useState<TabName>(wanted), [limit, setLimit] = useState(PAGE), [added, setAdded] = useState<Ev[]>([]), [origin, setOrigin] = useState('')
+  const [show, setShow] = useState<'all' | 'done' | 'open'>('all'), [tab, setTab] = useState<TabName>(wanted), [limit, setLimit] = useState(PAGE), [added, setAdded] = useState<Ev[]>([]), [origin, setOrigin] = useState('')
   useEffect(() => setTab(wanted), [wanted])
   useEffect(() => setOrigin(location.origin), [])
 
@@ -187,14 +198,16 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
   const missing = keys[tab].some((k) => !known.has(k)), asked = useRef(false)
   useEffect(() => { if (missing && !asked.current) { asked.current = true; router.refresh() } }, [missing, router]) // added elsewhere (a merge): get the details
 
+  const finished = useMemo(() => new Set(keys.completed), [keys.completed])
   const rows = useMemo(() => {
     const list = keys[tab].flatMap((k) => known.get(k) ?? [])
-    return tab === 'wishlist' ? wishlistOrder(list, today) : list
-  }, [keys, tab, known, today])
+    if (tab === 'wishlist') return wishlistOrder(list, today)
+    return show === 'done' ? list.filter((e) => finished.has(e.id)) : show === 'open' ? list.filter((e) => !finished.has(e.id)) : list
+  }, [keys, tab, known, today, show, finished])
   const counts = { wishlist: keys.wishlist.length, played: keys.played.length }
-  const finished = useMemo(() => new Set(keys.completed), [keys.completed])
+  const doneCount = keys.played.filter((k) => finished.has(k)).length
 
-  const pick = (t: TabName) => { setTab(t); setLimit(PAGE); history.replaceState(null, '', t === 'wishlist' ? '/profile' : `/profile?tab=${t}`) }
+  const pick = (t: TabName) => { setTab(t); setLimit(PAGE); setShow('all'); history.replaceState(null, '', t === 'wishlist' ? '/profile' : `/profile?tab=${t}`) }
   const feed = origin && keys.wishlist.length ? `${origin}/api/calendar.ics?ids=${keys.wishlist.slice(0, 300).join(',')}` : ''
 
   if (account.phase === 'out') {
@@ -218,6 +231,20 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
 
       <AddGame key={tab} list={tab} today={today} has={(k) => keys[tab].includes(k)} onAdded={(e) => setAdded((a) => [...a, e])} />
 
+      {tab === 'played' && counts.played > 0 && (
+        <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-5">
+          <div className="min-w-[220px] flex-1 sm:max-w-md">
+            <p className="flex items-baseline gap-2"><span className="display text-[40px] text-go">{doneCount}</span><span className="text-[15px] text-muted">of {counts.played} {counts.played === 1 ? 'game' : 'games'} completed</span></p>
+            <div role="progressbar" aria-label="Games completed" aria-valuemin={0} aria-valuemax={counts.played} aria-valuenow={doneCount} className="mt-2 h-1.5 overflow-hidden rounded-full bg-raised">
+              <div className="h-full rounded-full bg-go transition-[width] duration-700 ease-out" style={{ width: `${Math.round((doneCount / counts.played) * 100)}%` }} />
+            </div>
+          </div>
+          <div role="group" aria-label="Show" className="flex gap-2">
+            {([['all', 'All'], ['done', 'Completed'], ['open', 'Not finished']] as const).map(([id, label]) => <button key={id} type="button" onClick={() => { setShow(id); setLimit(PAGE) }} aria-pressed={show === id} className="pill">{label}</button>)}
+          </div>
+        </div>
+      )}
+
       <section aria-label={{ wishlist: 'Your wishlist', played: 'Games you have played' }[tab]} className="mt-10">
         {rows.length > 0 ? (
           <>
@@ -229,9 +256,9 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
         ) : (
           <div className="rounded-panel border border-dashed border-line/12 px-6 py-14 text-center">
             <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-raised text-muted">{tab === 'wishlist' ? <Heart on={false} className="h-6 w-6" /> : <Icon name="pad" className="h-6 w-6" />}</span>
-            <p className="mt-5 text-lg font-semibold">{EMPTY[tab][0]}</p>
-            <p className="mx-auto mt-2 max-w-sm text-muted">{EMPTY[tab][1]}</p>
-            <Link href="/#explore" className="btn btn-mark mt-7">Browse the calendar</Link>
+            <p className="mt-5 text-lg font-semibold">{tab === 'played' && counts.played > 0 ? (show === 'done' ? 'Nothing completed yet' : 'Everything here is completed') : EMPTY[tab][0]}</p>
+            <p className="mx-auto mt-2 max-w-sm text-muted">{tab === 'played' && counts.played > 0 ? (show === 'done' ? 'Press “Mark as completed” on a game you have finished.' : 'Every game you have played is marked as completed.') : EMPTY[tab][1]}</p>
+            {tab === 'played' && counts.played > 0 ? <button type="button" onClick={() => setShow('all')} className="btn btn-mark mt-7">Show all games</button> : <Link href="/#explore" className="btn btn-mark mt-7">Browse the calendar</Link>}
           </div>
         )}
       </section>

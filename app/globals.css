@@ -47,9 +47,11 @@
   --radius-panel: 22px;
   --animate-bar: bar 7s linear forwards;
   --animate-pop: pop 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
+  --animate-done: done 1s ease-out;
   --animate-enter: enter 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
   @keyframes bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
   @keyframes pop { 40% { transform: scale(1.35); } }
+  @keyframes done { 0% { box-shadow: 0 0 0 0 rgb(var(--go) / 0.5); } 100% { box-shadow: 0 0 0 16px rgb(var(--go) / 0); } }
   @keyframes enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 }
 
