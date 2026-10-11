@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
+import { NO_STORE, fail } from '@/lib/auth'
 import { hasDb } from '@/lib/db'
-import { NO_STORE, fail } from '@/lib/guard'
 import { prune } from '@/lib/library'
 
 // The daily clean-up, called by Vercel Cron (vercel.json) with CRON_SECRET as a bearer token

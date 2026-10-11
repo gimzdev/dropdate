@@ -12,6 +12,7 @@ import { DateBlock, FeedPanel, Heart, Icon, Img, Open, Score, TONE, Thumb, useLo
 const PAGE = 60
 const corner = 'grid h-10 w-10 place-items-center rounded-full bg-black/55 text-white/90 ring-1 ring-white/15 backdrop-blur-md transition ring-inset hover:bg-black/75 hover:text-white'
 const quiet = 'text-[15px] font-medium text-muted underline decoration-line/30 underline-offset-4 transition hover:text-fg'
+const empty = 'rounded-panel border border-dashed border-line/12 px-6 text-center'
 const platforms = (e: Ev) => e.platforms.map((p) => (p === 'PlayStation' ? 'PS' : p)).join(', ')
 
 /** Upcoming by date, then undated and "to be announced", then what is already out (newest first). */
@@ -20,10 +21,10 @@ function wishlistOrder(list: Ev[], today: string) {
   return [...list].sort((a, b) => rank(a) - rank(b) || (rank(a) === 2 ? b.start.localeCompare(a.start) : (a.start || '9').localeCompare(b.start || '9') || a.title.localeCompare(b.title)))
 }
 
-/** A game as a card: artwork, score and badges, then the date (wishlist), title and platforms. A played game has its own "Completed" button. */
+/** A game as a card; a played game has its own "Completed" button. */
 function Tile({ e, list, today, done }: { e: Ev; list: TabName; today: string; done: boolean }) {
   const esport = e.kind === 'tournament', out = !esport && !!e.start && e.start <= today, played = list === 'played'
-  const [fresh, setFresh] = useState(false) // for a moment after completing: the soft green pulse
+  const [fresh, setFresh] = useState(false) // a moment after completing: the soft green pulse
   useEffect(() => { if (!fresh) return; const t = setTimeout(() => setFresh(false), 1100); return () => clearTimeout(t) }, [fresh])
   const s = e.start ? status(e, today) : null
   const when = !e.start ? 'No date yet' : e.tba && e.start > today ? 'Date to be announced' : s!.label
@@ -32,8 +33,7 @@ function Tile({ e, list, today, done }: { e: Ev; list: TabName; today: string; d
   const finish = async () => {
     if (done) return void setList('completed', e.id, false)
     setFresh(true)
-    const saved = await setList('completed', e.id, true)
-    if (saved) notify(`${e.title} completed.`)
+    if (await setList('completed', e.id, true)) notify(`${e.title} completed.`)
     else setFresh(false)
   }
   return (
@@ -71,13 +71,12 @@ function Tile({ e, list, today, done }: { e: Ev; list: TabName; today: string; d
   )
 }
 
-/** What the search box and its button say, for each list. */
 const ADD: Record<TabName, { label: string; placeholder: string; button: string }> = {
   wishlist: { label: 'Search for a game to put on your wishlist', placeholder: 'Search a game to wishlist', button: 'Wishlist' },
   played: { label: 'Search for a game you have played', placeholder: 'Search a game you played', button: 'Played' },
 }
 
-/** Search every game and put one on a list (mostly older games the calendar lacks). Answers drop down over the page; leaving the box shuts them. */
+/** Search every game and put one on a list (mostly older games the calendar lacks). */
 function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; has: (key: string) => boolean; onAdded: (e: Ev) => void }) {
   const [q, setQ] = useState(''), [adding, setAdding] = useState(''), [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null), field = useRef<HTMLInputElement>(null)
@@ -90,12 +89,11 @@ function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; 
     else if (shown) { e.preventDefault(); setOpen(false) } // the first Escape shuts the answers, the next one empties the box
     else setQ('')
   }
-
   async function add(f: Found) {
     setAdding(f.key)
-    onAdded({ id: f.key, title: f.title, kind: 'release', start: f.released ?? '', thumb: f.thumb, shots: [], pop: 0, platforms: [], genres: [], slug: f.slug, ...(f.metacritic && { metacritic: f.metacritic }) }) // the row shows at once
+    onAdded({ id: f.key, title: f.title, kind: 'release', start: f.released ?? '', thumb: f.thumb, pop: 0, platforms: [], genres: [], slug: f.slug, ...(f.metacritic && { metacritic: f.metacritic }) })
     const saved = await setList(list, f.key, true)
-    if (saved?.ev) onAdded(saved.ev) // and takes the server's copy of the details when it arrives
+    if (saved?.ev) onAdded(saved.ev)
     setAdding('')
   }
   return (
@@ -104,8 +102,7 @@ function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; 
       <div className="relative">
         <Icon name="search" className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-dim" />
         <input ref={field} id="add-game" type="search" autoComplete="off" spellCheck={false} value={q} onChange={(e) => { setQ(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} onClick={() => setOpen(true)}
-          placeholder={ADD[list].placeholder}
-          className="h-12 w-full rounded-full bg-panel pr-4 pl-11 text-[16px] ring-1 ring-line/12 ring-inset transition placeholder:text-dim" />
+          placeholder={ADD[list].placeholder} className="h-12 w-full rounded-full bg-panel pr-4 pl-11 text-[16px] ring-1 ring-line/12 ring-inset transition placeholder:text-dim" />
         <div aria-live="polite">
           {shown && (
             <div className="absolute inset-x-0 top-full z-30 mt-2 max-h-[min(34rem,70svh)] overflow-y-auto overscroll-contain rounded-2xl bg-panel shadow-[0_24px_60px_-20px_rgb(0_0_0/0.9)] ring-1 ring-line/12 ring-inset">
@@ -138,7 +135,6 @@ function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; 
   )
 }
 
-/** Download a copy of the account as a file. */
 async function download() {
   try {
     const res = await fetch('/api/me/export', { cache: 'no-store' })
@@ -185,7 +181,7 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
   useEffect(() => setTab(wanted), [wanted])
   useEffect(() => setOrigin(location.origin), [])
 
-  // what the server rendered, newest first; the account store takes over from there (seed)
+  // what the server rendered, newest first; the account store takes over from there
   const first = useMemo(() => {
     const keys = (f: 'wishlisted' | 'played' | 'completed') => items.filter((i) => i[f]).sort((a, b) => b[f]!.localeCompare(a[f]!)).map((i) => i.ev.id)
     return { wishlist: keys('wishlisted'), played: keys('played'), completed: keys('completed') }
@@ -203,21 +199,18 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
     if (tab === 'wishlist') return wishlistOrder(list, today)
     return show === 'done' ? list.filter((e) => finished.has(e.id)) : show === 'open' ? list.filter((e) => !finished.has(e.id)) : list
   }, [keys, tab, known, today, show, finished])
-  const counts = { wishlist: keys.wishlist.length, played: keys.played.length }
-  const doneCount = keys.played.filter((k) => finished.has(k)).length
-
+  const counts = { wishlist: keys.wishlist.length, played: keys.played.length }, doneCount = keys.played.filter((k) => finished.has(k)).length
   const pick = (t: TabName) => { setTab(t); setLimit(PAGE); setShow('all'); history.replaceState(null, '', t === 'wishlist' ? '/profile' : `/profile?tab=${t}`) }
   const feed = origin && keys.wishlist.length ? `${origin}/api/calendar.ics?ids=${keys.wishlist.slice(0, 300).join(',')}` : ''
+  const someDone = tab === 'played' && counts.played > 0
 
-  if (account.phase === 'out') {
-    return (
-      <div className="mt-14 rounded-panel border border-dashed border-line/12 px-6 py-16 text-center">
-        <p className="text-lg font-semibold">You were signed out</p>
-        <p className="mx-auto mt-2 max-w-sm text-muted">Sign in again to see your wishlist and the games you have played.</p>
-        <Link href="/signin?next=/profile" className="btn btn-mark mt-7">Sign in</Link>
-      </div>
-    )
-  }
+  if (account.phase === 'out') return (
+    <div className={`mt-14 ${empty} py-16`}>
+      <p className="text-lg font-semibold">You were signed out</p>
+      <p className="mx-auto mt-2 max-w-sm text-muted">Sign in again to see your wishlist and the games you have played.</p>
+      <Link href="/signin?next=/profile" className="btn btn-mark mt-7">Sign in</Link>
+    </div>
+  )
 
   return (
     <>
@@ -230,7 +223,7 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
 
       <AddGame key={tab} list={tab} today={today} has={(k) => keys[tab].includes(k)} onAdded={(e) => setAdded((a) => [...a, e])} />
 
-      {tab === 'played' && counts.played > 0 && (
+      {someDone && (
         <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-5">
           <div className="min-w-[220px] flex-1 sm:max-w-md">
             <p className="flex items-baseline gap-2"><span className="display text-[40px] text-go">{doneCount}</span><span className="text-[15px] text-muted">of {counts.played} {counts.played === 1 ? 'game' : 'games'} completed</span></p>
@@ -244,7 +237,7 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
         </div>
       )}
 
-      <section aria-label={{ wishlist: 'Your wishlist', played: 'Games you have played' }[tab]} className="mt-10">
+      <section aria-label={tab === 'wishlist' ? 'Your wishlist' : 'Games you have played'} className="mt-10">
         {rows.length > 0 ? (
           <>
             <ul className="grid grid-cols-2 gap-x-3.5 gap-y-8 sm:grid-cols-3 sm:gap-x-5 lg:grid-cols-4">
@@ -253,11 +246,11 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
             {rows.length > limit && <div className="mt-10 text-center"><button type="button" onClick={() => setLimit((l) => l + PAGE * 2)} className="btn btn-line px-7">Show more<span className="text-muted">{rows.length - limit} left</span></button></div>}
           </>
         ) : (
-          <div className="rounded-panel border border-dashed border-line/12 px-6 py-14 text-center">
+          <div className={`${empty} py-14`}>
             <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-raised text-muted">{tab === 'wishlist' ? <Heart on={false} className="h-6 w-6" /> : <Icon name="pad" className="h-6 w-6" />}</span>
-            <p className="mt-5 text-lg font-semibold">{tab === 'played' && counts.played > 0 ? (show === 'done' ? 'Nothing completed yet' : 'Everything here is completed') : EMPTY[tab][0]}</p>
-            <p className="mx-auto mt-2 max-w-sm text-muted">{tab === 'played' && counts.played > 0 ? (show === 'done' ? 'Press “Mark as completed” on a game you have finished.' : 'Every game you have played is marked as completed.') : EMPTY[tab][1]}</p>
-            {tab === 'played' && counts.played > 0 ? <button type="button" onClick={() => setShow('all')} className="btn btn-mark mt-7">Show all games</button> : <Link href="/#explore" className="btn btn-mark mt-7">Browse the calendar</Link>}
+            <p className="mt-5 text-lg font-semibold">{someDone ? (show === 'done' ? 'Nothing completed yet' : 'Everything here is completed') : EMPTY[tab][0]}</p>
+            <p className="mx-auto mt-2 max-w-sm text-muted">{someDone ? (show === 'done' ? 'Press “Mark as completed” on a game you have finished.' : 'Every game you have played is marked as completed.') : EMPTY[tab][1]}</p>
+            {someDone ? <button type="button" onClick={() => setShow('all')} className="btn btn-mark mt-7">Show all games</button> : <Link href="/#explore" className="btn btn-mark mt-7">Browse the calendar</Link>}
           </div>
         )}
       </section>

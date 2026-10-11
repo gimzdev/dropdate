@@ -1,25 +1,21 @@
-// Everyone's library, server side only: what each person wishlisted, played or completed, and the shared cache of those games'
-// public details (dd_game), so a library opens without calling the data sources for every game.
+// Everyone's library (server only): what each person wishlisted, played or completed, and a shared cache of those games' public
+// details (dd_game), so a library opens without asking the sources for every game.
 import 'server-only'
 import { after } from 'next/server'
 import { type Ev, type Flags, GAME_KEY, type LibItem, type ListName, PLATFORMS, type Platform } from './core'
 import { fromSource, getEvents } from './data'
-import { hashKey, q, tx } from './db'
-import { allow, mailbox } from './limit'
+import { allow, hashKey, mailbox, q, tx } from './db'
 
-/** Games per person: a wishlist is a list, not a database. */
 export const LIMIT = 2000
-/** Inactive accounts are deleted after this many months without a sign-in or a visit. */
 export const INACTIVE_MONTHS = 24
-/** Source lookups (for games nobody saved yet) one person may cause in an hour: the quotas are shared by everyone. */
+/** Lookups of games nobody saved yet that one person may cause in an hour: the sources' quotas are shared. */
 const NEW_GAMES_PER_HOUR = 60
 
-/** A failure with something worth telling the person. */
 export class LibraryError extends Error {
   constructor(public status: number, message: string) { super(message) }
 }
+const unavailable = () => new LibraryError(502, 'The game data did not load. Try again in a minute.')
 
-// ── The shared cache of public game details ──
 
 interface GameRow {
   key: string; kind: 'release' | 'tournament'; title: string; slug: string | null; url: string | null; thumb: string
@@ -33,25 +29,21 @@ const STALE = `g.refreshed_at < now() - (case when g.starts_on is null or g.star
 
 const web = (u?: string) => (u && /^https?:\/\//.test(u) ? u : null)
 const day = (s?: string) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null)
-
-/** What is kept of an event: its public face, no more. */
 const toRow = (e: Ev): GameRow => ({
   key: e.id, kind: e.kind, title: e.title.slice(0, 300), slug: e.slug && /^[a-z0-9-]{1,200}$/i.test(e.slug) ? e.slug : null, url: web(e.url), thumb: web(e.thumb) ?? '',
   starts_on: day(e.start), ends_on: day(e.end), tba: !!e.tba, platforms: e.platforms, genres: e.genres.slice(0, 12),
   metacritic: Number.isInteger(e.metacritic) && e.metacritic! >= 0 && e.metacritic! <= 100 ? e.metacritic! : null, prize: e.prize?.slice(0, 40) ?? null,
 })
 const toEv = (r: GameRow): Ev => ({
-  id: r.key, title: r.title, kind: r.kind, start: r.starts_on ?? '', thumb: r.thumb, shots: [], pop: 0,
+  id: r.key, title: r.title, kind: r.kind, start: r.starts_on ?? '', thumb: r.thumb, pop: 0,
   platforms: r.platforms.filter((p): p is Platform => (PLATFORMS as readonly string[]).includes(p)), genres: r.genres,
   ...(r.ends_on && r.ends_on !== r.starts_on && { end: r.ends_on }), ...(r.tba && { tba: true }), ...(r.slug && { slug: r.slug }), ...(r.url && { url: r.url }),
   ...(r.metacritic !== null && { metacritic: r.metacritic }), ...(r.prize && { prize: r.prize }),
 })
 
-/** Stores or refreshes snapshots in one statement; a score or artwork a refresh lacks is kept. */
 export async function saveGames(evs: Ev[]) {
   const rows = [...new Map(evs.filter((e) => GAME_KEY.test(e.id)).map((e) => [e.id, toRow(e)])).values()]
-  if (!rows.length) return
-  await q(
+  if (rows.length) await q(
     `insert into dd_game (key, kind, title, slug, url, thumb, starts_on, ends_on, tba, platforms, genres, metacritic, prize, refreshed_at)
      select x.key, x.kind, x.title, x.slug, x.url, x.thumb, x.starts_on, x.ends_on, x.tba, x.platforms, x.genres, x.metacritic, x.prize, now()
      from jsonb_to_recordset($1::jsonb) as x(key text, kind text, title text, slug text, url text, thumb text, starts_on date, ends_on date, tba boolean, platforms text[], genres text[], metacritic smallint, prize text)
@@ -64,6 +56,8 @@ export async function saveGames(evs: Ev[]) {
 
 const unknown = new Map<string, number>() // games no source knows, for ten minutes
 type Calendar = Awaited<ReturnType<typeof getEvents>>
+const calendarWithin = (ms: number): Promise<Calendar> =>
+  Promise.race([getEvents(), new Promise<Calendar>((done) => setTimeout(done, ms, { events: [], today: '', updated: '', stale: true, error: 'slow' }))])
 
 /** A game neither stored nor in the calendar: its details, 'gone' (nothing knows it), 'later' (unreachable) or 'busy' (hourly allowance spent). */
 async function lookup(userId: string, key: string, calendar: Calendar): Promise<Ev | 'gone' | 'later' | 'busy'> {
@@ -79,69 +73,63 @@ async function lookup(userId: string, key: string, calendar: Calendar): Promise<
   return 'gone'
 }
 
-/** The game's snapshot, stored first if new. Null when nothing knows it; a LibraryError when it cannot be checked now. */
 async function ensureGame(userId: string, key: string): Promise<Ev | null> {
   const [have] = await q<GameRow>(`select ${GAME} from dd_game g where g.key = $1`, [key])
   if (have) return toEv(have)
-  // A cold calendar can take many seconds to build: wait for it briefly, then go straight to the game's own source
-  const calendar: Calendar = await Promise.race([getEvents(), new Promise<Calendar>((done) => setTimeout(done, 4000, { events: [], today: '', updated: '', stale: true, error: 'slow' }))])
+  const calendar = await calendarWithin(4000)
   let ev: Ev | null = calendar.events.find((e) => e.id === key) ?? null
   if (!ev) {
     const found = await lookup(userId, key, calendar)
     if (found === 'gone') return null
     if (found === 'busy') throw new LibraryError(429, 'That is a lot of new games in an hour. Try again a little later.')
-    if (found === 'later') { throw new LibraryError(502, 'The game data did not load. Try again in a minute.') }
+    if (found === 'later') throw unavailable()
     ev = found
   }
   await saveGames([ev])
   return toEv(toRow(ev))
 }
 
-/** Refreshes stale snapshots: from the live calendar now (free), the rest from their sources after the response. */
+/** Refreshes stale snapshots: from the live calendar now (free), a few more from their sources after the answer. */
 async function refresh(keys: string[]): Promise<Map<string, Ev>> {
   const fresh = new Map<string, Ev>()
   const calendar = await Promise.race([getEvents().catch(() => null), new Promise<null>((done) => setTimeout(done, 3000, null))])
   const byId = new Map((calendar?.events ?? []).map((e) => [e.id, e]))
   for (const k of keys) { const e = byId.get(k); if (e) fresh.set(k, toEv(toRow(e))) }
   await saveGames(keys.flatMap((k) => byId.get(k) ?? []))
-  const rest = keys.filter((k) => !fresh.has(k)).slice(0, 6) // a few per visit: the data sources have quotas
+  const rest = keys.filter((k) => !fresh.has(k)).slice(0, 6) // a few per visit: the sources have quotas
   if (rest.length) after(async () => {
     for (const k of rest) {
       try {
         const e = await fromSource(k)
         if (e) await saveGames([e])
         else await q('update dd_game set refreshed_at = now() where key = $1', [k]) // gone from its source: stop asking every visit
-      } catch {} // unreachable: ask again next visit
+      } catch {} // unreachable: next visit
     }
   })
   return fresh
 }
 
-// ── Reading ──
 
-/** Just the keys, newest first: what the buttons all over the site need. */
 export async function libraryKeys(userId: string) {
   const rows = await q<{ game_key: string; w: Date | null; p: Date | null; c: Date | null }>(`select l.game_key, ${DATES} from dd_library l where l.user_id = $1`, [userId])
   const by = (f: 'w' | 'p' | 'c') => rows.filter((r) => r[f]).sort((a, b) => +b[f]! - +a[f]!).map((r) => r.game_key)
   return { wishlist: by('w'), played: by('p'), completed: by('c') }
 }
 
-/** The whole library with each game's details, for the profile page. */
 export async function library(userId: string): Promise<LibItem[]> {
   const rows = await q<Dated & { stale: boolean }>(`select ${GAME}, ${DATES}, (${STALE}) as stale from dd_library l join dd_game g on g.key = l.game_key where l.user_id = $1`, [userId])
   const fresh = await refresh(rows.filter((r) => r.stale).map((r) => r.key)).catch(() => new Map<string, Ev>())
   return rows.map((r) => ({ ev: fresh.get(r.key) ?? toEv(r), ...(r.w && { wishlisted: r.w.toISOString() }), ...(r.p && { played: r.p.toISOString() }), ...(r.c && { completed: r.c.toISOString() }) }))
 }
 
-// ── Changing ──
 
-// Turning a list on, as a new row and as an update. Played and completed take the game off the wishlist; completed also marks it played.
+// Turning a list on, as a new row and as an update: played and completed take the game off the wishlist, completed also marks it played
 const ON = {
-  wishlist: { values: 'now(), null::timestamptz, null::timestamptz', update: 'wishlisted_at = coalesce(dd_library.wishlisted_at, now())' },
-  played: { values: 'null::timestamptz, now(), null::timestamptz', update: 'played_at = coalesce(dd_library.played_at, now()), wishlisted_at = null' },
-  completed: { values: 'null::timestamptz, now(), now()', update: 'played_at = coalesce(dd_library.played_at, now()), completed_at = coalesce(dd_library.completed_at, now()), wishlisted_at = null' },
+  wishlist: ['now(), null::timestamptz, null::timestamptz', 'wishlisted_at = coalesce(dd_library.wishlisted_at, now())'],
+  played: ['null::timestamptz, now(), null::timestamptz', 'played_at = coalesce(dd_library.played_at, now()), wishlisted_at = null'],
+  completed: ['null::timestamptz, now(), now()', 'played_at = coalesce(dd_library.played_at, now()), completed_at = coalesce(dd_library.completed_at, now()), wishlisted_at = null'],
 } as const
-// Turning a list off. A row with neither a wishlist nor a played date goes; un-playing un-completes, un-completing keeps it played.
+// Turning it off: a row with neither a wishlist nor a played date goes; un-playing un-completes, un-completing keeps it played
 const OFF = {
   wishlist: ['update dd_library set wishlisted_at = null where user_id = $1 and game_key = $2 and played_at is not null', 'delete from dd_library where user_id = $1 and game_key = $2 and played_at is null'],
   played: ['update dd_library set played_at = null, completed_at = null where user_id = $1 and game_key = $2 and wishlisted_at is not null', 'delete from dd_library where user_id = $1 and game_key = $2 and wishlisted_at is null'],
@@ -149,24 +137,20 @@ const OFF = {
 } as const
 const FLAGS = 'wishlisted_at is not null as wishlist, played_at is not null as played, completed_at is not null as completed'
 
-/** Turns a list on or off for a game (see ON and OFF); tournaments can only be wishlisted. Returns the flags as stored. */
 export async function setFlag(userId: string, key: string, list: ListName, on: boolean): Promise<{ flags: Flags; ev?: Ev }> {
   if (!GAME_KEY.test(key)) throw new LibraryError(400, 'That is not a game.')
   if (list !== 'wishlist' && key.startsWith('ps-')) throw new LibraryError(400, 'Only games can be marked as played or completed.')
   let ev: Ev | null = null
   if (on) {
-    try { ev = await ensureGame(userId, key) } catch (e) {
-      if (e instanceof LibraryError) throw e
-      throw new LibraryError(502, 'The game data did not load. Try again in a minute.')
-    }
+    try { ev = await ensureGame(userId, key) } catch (e) { throw e instanceof LibraryError ? e : unavailable() }
     if (!ev) throw new LibraryError(404, 'We could not find that game.')
   }
   const change = () => tx(async (c) => {
     if (on) {
       const { rows } = await c.query<Flags>(
         `insert into dd_library (user_id, game_key, wishlisted_at, played_at, completed_at)
-         select $1, $2, ${ON[list].values} where (select count(*) from dd_library where user_id = $1) < $3 or exists (select 1 from dd_library where user_id = $1 and game_key = $2)
-         on conflict (user_id, game_key) do update set ${ON[list].update}
+         select $1, $2, ${ON[list][0]} where (select count(*) from dd_library where user_id = $1) < $3 or exists (select 1 from dd_library where user_id = $1 and game_key = $2)
+         on conflict (user_id, game_key) do update set ${ON[list][1]}
          returning ${FLAGS}`, [userId, key, LIMIT])
       if (!rows[0]) throw new LibraryError(409, `Your library is full (${LIMIT} games). Remove some to add more.`)
       return rows[0]
@@ -191,14 +175,12 @@ export async function setFlag(userId: string, key: string, list: ListName, on: b
  */
 export async function merge(userId: string, keys: unknown): Promise<{ added: number; done: string[] }> {
   const given = (Array.isArray(keys) ? keys : []).filter((k): k is string => typeof k === 'string').slice(0, 500)
-  const junk = given.filter((k) => !GAME_KEY.test(k))
-  const wanted = [...new Set(given.filter((k) => GAME_KEY.test(k)))]
+  const junk = given.filter((k) => !GAME_KEY.test(k)), wanted = [...new Set(given.filter((k) => GAME_KEY.test(k)))]
   if (!wanted.length) return { added: 0, done: junk }
   const have = new Set((await q<{ key: string }>('select key from dd_game where key = any($1::text[])', [wanted])).map((r) => r.key))
   const missing = wanted.filter((k) => !have.has(k)), gone = new Set<string>()
   if (missing.length) {
-    const calendar = await getEvents(), byId = new Map(calendar.events.map((e) => [e.id, e]))
-    const found = missing.flatMap((k) => byId.get(k) ?? [])
+    const calendar = await getEvents(), byId = new Map(calendar.events.map((e) => [e.id, e])), found = missing.flatMap((k) => byId.get(k) ?? [])
     // what the calendar no longer holds comes from its source: at most 20 at once, within the hourly allowance
     await Promise.all(missing.filter((k) => !byId.has(k)).slice(0, 20).map(async (k) => {
       const r = await lookup(userId, k, calendar)
@@ -216,9 +198,7 @@ export async function merge(userId: string, keys: unknown): Promise<{ added: num
   return { added: inserted.length, done: [...junk, ...wanted.filter((k) => mine.has(k) || gone.has(k))] }
 }
 
-// ── Your data ──
 
-/** Everything held about an account, as a person can read it. */
 export async function exportData(user: { id: string; email: string; since: string }) {
   const [accounts, sessions, rows, [who]] = await Promise.all([
     q<{ providerId: string; accountId: string; createdAt: Date }>('select "providerId", "accountId", "createdAt" from "account" where "userId" = $1 order by "createdAt"', [user.id]),
@@ -244,7 +224,6 @@ export async function exportData(user: { id: string; email: string; since: strin
   }
 }
 
-/** Deletes the account; sessions, linked providers and the library go with the user row. */
 export async function deleteAccount(user: { id: string; email: string }) {
   await tx(async (c) => {
     await c.query('delete from "verification" where "identifier" = any($1::text[])', [['sign-in', 'email-verification', 'forget-password'].map((t) => `${t}-otp-${user.email}`)])

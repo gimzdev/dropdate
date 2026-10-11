@@ -8,10 +8,8 @@
 @custom-variant signed (&:where([data-signed] *));
 
 /*
-  Dropdate
-  Black is the canvas, a dark room where the artwork brings the colour. Paper and ash carry the words.
-  Mark, a highlighter yellow, means time: today, what is about to drop, and the main action. Nothing else.
-  Arena (cyan) is esports. Go (green) is out now. Live (red) is on air right now.
+  Black is the canvas, a dark room where the artwork brings the colour; paper and ash carry the words. Mark, a highlighter yellow,
+  means time: today, what is about to drop, the main action. Arena (cyan) is esports, go (green) out now, live (red) on air now.
   One family, Mona Sans: condensed and heavy for dates, numbers and headings, regular width for reading.
 */
 :root {

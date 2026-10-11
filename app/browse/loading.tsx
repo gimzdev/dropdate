@@ -1,6 +1,5 @@
 import { Header } from '@/components/ui'
 
-/** What shows while the first page of games is on its way. */
 export default function Loading() {
   return (
     <>

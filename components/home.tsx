@@ -98,7 +98,6 @@ export function Hero({ slides, today: serverToday }: { slides: Ev[]; today: stri
   )
 }
 
-/** The next seven days, one column each, today circled. */
 export function WeekStrip({ items, today: serverToday }: { items: Ev[]; today: string }) {
   const today = useToday(serverToday), explore = useExplore()
   const days = Array.from({ length: 7 }, (_, k) => shift(today, k)).map((d) => ({ d, list: items.filter((e) => e.start === d).sort((a, b) => b.pop - a.pop) }))
@@ -117,7 +116,7 @@ export function WeekStrip({ items, today: serverToday }: { items: Ev[]; today: s
 function Day({ d, list, today, onOpen }: { d: string; list: Ev[]; today: string; onOpen: () => void }) {
   const isToday = d === today, label = isToday ? 'Today' : gap(today, d) === 1 ? 'Tomorrow' : weekday(d)
   const [lead, ...rest] = list, more = rest.slice(0, 3), extra = rest.length - more.length
-  return ( // columns are ruled like a wall calendar: the line sits in the gap, so every day gets the same width
+  return ( // ruled like a wall calendar: the line sits in the gap, so every day gets the same width
     <li className="relative flex w-[220px] shrink-0 snap-start flex-col before:absolute before:inset-y-0 before:-left-4 before:w-px before:bg-line/10 first:before:hidden xl:w-auto">
       <button type="button" onClick={onOpen} aria-label={`${label}, ${longDate(d)}: ${plural(list.length, 'event')}. Open it in the calendar`} className="mb-4 flex items-end gap-3 rounded-lg text-left">
         <span className="relative grid h-[58px] min-w-[50px] place-items-center">{isToday && <Circled className="-inset-x-3 -inset-y-2" />}<span className="display text-[52px] leading-none">{+d.slice(8)}</span></span>
@@ -153,7 +152,7 @@ function Day({ d, list, today, onOpen }: { d: string; list: Ev[]; today: string;
   )
 }
 
-/** The most followed upcoming games after the ones in the hero: five large tiles and a short list. */
+/** The most followed upcoming games after those in the hero: five big tiles and a short list. */
 export function Upcoming({ items, today: serverToday }: { items: Ev[]; today: string }) {
   const today = useToday(serverToday)
   if (items.length < 3) return null
@@ -211,7 +210,6 @@ function Tile({ e, today, big, className = '' }: { e: Ev; today: string; big?: b
   )
 }
 
-/** The biggest launches of the past month, ranked. */
 export function Fresh({ items, today: serverToday }: { items: Ev[]; today: string }) {
   const today = useToday(serverToday)
   if (!items.length) return null
@@ -246,7 +244,6 @@ export function Fresh({ items, today: serverToday }: { items: Ev[]; today: strin
 const COLS = 'md:grid-cols-[170px_minmax(0,1fr)_200px_130px]'
 const WHEN = { live: 'text-live', soon: 'text-mark', future: 'text-fg', past: 'text-dim' }
 
-/** Esports as a broadcast schedule: what is live, what is next, the game and the prize pool. */
 export function Schedule({ items, today: serverToday }: { items: Ev[]; today: string }) {
   const today = useToday(serverToday)
   if (!items.length) return null
@@ -338,11 +335,10 @@ export function Explorer({ data }: { data: Payload }) {
 
   const { list, parsed } = useMemo(() => {
     const span = view === 'calendar' ? { from: `${month}-01`, to: shift(`${month}-01`, new Date(+month.slice(0, 4), +month.slice(5), 0).getDate() - 1) } : {}
-    const r = search(data.events, query, today, { kind, platform, genre, ...span })
+    const r = search(data.events, query, today, { kind, platform, genre, ...span }), wish = onlySaved && new Set(saved.ids)
     let l = r.list
-    // just browsing: tournaments under way are in the esports schedule
-    if (view === 'grid' && kind === 'all' && !query.trim() && !onlySaved) l = l.filter((e) => e.kind === 'release' || e.start >= today)
-    if (onlySaved) l = l.filter((e) => saved.has(e.id))
+    if (view === 'grid' && kind === 'all' && !query.trim() && !onlySaved) l = l.filter((e) => e.kind === 'release' || e.start >= today) // just browsing: tournaments under way are in the esports schedule
+    if (wish) l = l.filter((e) => wish.has(e.id))
     if (view === 'grid' && sort !== 'date') l = [...l].sort((a, b) => (sort === 'hype' ? b.pop - a.pop : score(b) - score(a)))
     return { list: l, parsed: r.parsed }
   }, [data.events, query, today, kind, platform, genre, sort, view, onlySaved, saved.ids, month])
@@ -440,21 +436,18 @@ export function Explorer({ data }: { data: Payload }) {
   )
 }
 
-/** The search box: suggestions as you type, and the filters it understood. */
 function SearchBox({ value, query, onChange, events, today, chips, text }: { value: string; query: string; onChange: (v: string) => void; events: Ev[]; today: string; chips: Chip[]; text: string }) {
   const router = useRouter()
   const [focus, setFocus] = useState(false), [active, setActive] = useState(-1)
   const wrap = useRef<HTMLDivElement>(null), field = useRef<HTMLInputElement>(null), blurred = useRef<ReturnType<typeof setTimeout>>(undefined)
-  // suggestions show while the box has focus; a press elsewhere lets go of it (phones keep focus on taps that do nothing)
-  useOutside(wrap, focus, () => field.current?.blur())
+  useOutside(wrap, focus, () => field.current?.blur()) // phones keep focus on taps that do nothing: a press elsewhere lets go
   useEffect(() => () => clearTimeout(blurred.current), [])
   // suggestions only when the query names a game: a pure filter ("ps5 next month") is answered by the grid
   const local = useMemo(() => (text.trim() ? search(events, query, today, { from: '0000-01-01', to: '9999-12-31' }).list.sort((a, b) => b.pop - a.pop).slice(0, 6) : []), [events, query, today, text])
-  // titles the calendar lacks (older games) are looked up by name
-  const term = text.trim(), { found } = useLookup(term.length >= 2 && local.length < 6 ? term : '')
+  const term = text.trim(), { found } = useLookup(term.length >= 2 && local.length < 6 ? term : '') // titles the calendar lacks (older games)
   const hits = useMemo(() => {
     const seen = new Set(local.map((e) => e.slug))
-    const more = (found ?? []).filter((g) => !seen.has(g.slug)).map((g): Ev => ({ id: `lookup-${g.slug}`, slug: g.slug, title: g.title, kind: 'release', start: g.released ?? '', thumb: g.thumb, shots: [], platforms: [], genres: [], pop: 0 }))
+    const more = (found ?? []).filter((g) => !seen.has(g.slug)).map((g): Ev => ({ id: `lookup-${g.slug}`, slug: g.slug, title: g.title, kind: 'release', start: g.released ?? '', thumb: g.thumb, platforms: [], genres: [], pop: 0 }))
     return [...local, ...more].slice(0, 10)
   }, [local, found])
   useEffect(() => setActive(-1), [value])
@@ -468,7 +461,6 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
   }
   const expanded = focus && hits.length > 0
   const option = (n: number) => ({ role: 'option', 'aria-selected': n === active, onMouseEnter: () => setActive(n) })
-
   return (
     <div className="max-w-3xl">
       <div ref={wrap} className="relative">
@@ -514,19 +506,17 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
   )
 }
 
-/** The month view: a wall calendar with what starts each day, today circled. */
 function MonthGrid({ month, events, today, selected, onSelect, onMonth }: { month: string; events: Ev[]; today: string; selected?: string; onSelect: (d: string) => void; onMonth: (n: number) => void }) {
   const cells = useMemo(() => {
     const first = toDate(`${month}-01`), days = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate()
     const count = Math.ceil((first.getDay() + days) / 7) * 7, start = shift(`${month}-01`, -first.getDay()), last = shift(start, count - 1), byDay = new Map<string, Ev[]>()
     for (const e of events) for (let d = e.start < start ? start : e.start; d <= (e.end ?? e.start) && d <= last; d = shift(d, 1)) byDay.get(d)?.push(e) ?? byDay.set(d, [e])
-    return Array.from({ length: count }, (_, n) => {
-      const d = shift(start, n) // each day lists what starts that day first, then the biggest
+    return Array.from({ length: count }, (_, n) => { // each day lists what starts that day first, then the biggest
+      const d = shift(start, n)
       return { d, inMonth: d.startsWith(month), list: (byDay.get(d) ?? []).sort((a, b) => +(b.start === d) - +(a.start === d) || b.pop - a.pop) }
     })
   }, [month, events])
   const nav = 'btn btn-sm btn-line w-9 px-0'
-
   return (
     <div className="overflow-hidden rounded-panel bg-panel">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">

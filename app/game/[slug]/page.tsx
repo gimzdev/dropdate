@@ -2,15 +2,14 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { Progress } from '@/components/account'
-import { About, Gallery, Rail } from '@/components/game'
+import { About, Gallery, Rail, Trailer } from '@/components/game'
 import { Footer } from '@/components/site'
-import { BigDate, Countdown, Header, Icon, SaveButton } from '@/components/ui'
-import { ACCOUNTS, SITE, gap, googleUrl, lite, longDate, monthLabel, scoreTone, srcSet, status } from '@/lib/core'
-import { getEvents, getGame } from '@/lib/data'
+import { BigDate, Countdown, Header, Icon, Progress, SaveButton } from '@/components/ui'
+import { ACCOUNTS, SITE, googleUrl, longDate, monthLabel, scoreTone, srcSet, status } from '@/lib/core'
+import { getEvents, getGame, getSimilar } from '@/lib/data'
 
 export const revalidate = 21600
-export const generateStaticParams = async () => [] // built on first visit, then cached and refreshed every 6 hours
+export const generateStaticParams = async () => [] // built on the first visit, then kept and refreshed every 6 hours
 
 type Props = { params: Promise<{ slug: string }> }
 
@@ -22,10 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
-  <section className="rounded-panel bg-panel p-5 md:p-6">
-    <h2 className="mb-3 text-[15px] font-semibold text-muted">{title}</h2>
-    {children}
-  </section>
+  <section className="rounded-panel bg-panel p-5 md:p-6"><h2 className="mb-3 text-[15px] font-semibold text-muted">{title}</h2>{children}</section>
 )
 const Part = ({ id, title, children }: { id: string; title: string; children: ReactNode }) => (
   <section aria-labelledby={`${id}-title`}><h2 id={`${id}-title`} className="h-section mb-6">{title}</h2>{children}</section>
@@ -39,21 +35,16 @@ export default async function GamePage({ params }: Props) {
   if (!g) notFound()
   const { today } = data, ev = data.events.find((e) => e.id === g.id), date = ev?.start ?? g.released // the hourly calendar has the freshest date
   const st = date ? status({ kind: 'release', start: date }, today) : undefined, upcoming = !!date && date > today, released = !!date && date <= today, tba = !!ev?.tba
-  const nearby = date ? data.events.filter((e) => e.id !== g.id && Math.abs(gap(date, e.start)) <= 10).sort((a, b) => b.pop - a.pop).slice(0, 12).map(lite) : []
+  const similar = await getSimilar(g.id)
   const facts = filled([
     ['Release date', date ? (tba ? `${monthLabel(date.slice(0, 7))}, exact day not announced` : longDate(date)) : 'Not announced yet'],
-    ['Platforms', g.platforms.join(', ')],
-    ['Developer', g.developers.slice(0, 2).join(', ')],
-    ['Publisher', g.publishers.slice(0, 2).join(', ')],
+    ['Platforms', g.platforms.join(', ')], ['Developer', g.developers.slice(0, 2).join(', ')], ['Publisher', g.publishers.slice(0, 2).join(', ')],
   ])
   const details = filled([
-    ['Average playtime', g.playtime ? `${g.playtime} hours` : ''],
-    [g.scoreFrom ? 'Critics (IGDB)' : 'Metacritic', g.metacritic ? `${g.metacritic} out of 100` : 'No score yet'],
-    ['RAWG rating', g.rating ? `${g.rating.toFixed(1)} out of 5` : ''],
-    ['Age rating', g.esrb ?? ''],
+    ['Average playtime', g.playtime ? `${g.playtime} hours` : ''], [g.scoreFrom ? 'Critics (IGDB)' : 'Metacritic', g.metacritic ? `${g.metacritic} out of 100` : 'No score yet'],
+    ['Player rating (IGDB)', g.rating ? `${g.rating.toFixed(1)} out of 5` : ''], ['Age rating', g.age ?? ''],
   ])
   const ld = { '@context': 'https://schema.org', '@type': 'VideoGame', name: g.name, url: `${SITE}/game/${g.slug}`, image: g.image, description: g.description?.slice(0, 300), datePublished: date, genre: g.genres, gamePlatform: g.platforms, publisher: g.publishers.map((name) => ({ '@type': 'Organization', name })) }
-
   return (
     <>
       <Header overHero />
@@ -73,7 +64,7 @@ export default async function GamePage({ params }: Props) {
               <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2.5">
                 {st && !upcoming && <span className={`text-[15px] font-semibold ${st.tone === 'live' ? 'text-go' : 'text-white/75'}`}>{st.label}</span>}
                 {!!g.metacritic && <span title={g.scoreFrom ? 'Average of critics’ reviews, from IGDB' : 'Metacritic score'} className={`tag text-[13px] ${scoreTone(g.metacritic)}`}>{g.metacritic} {g.scoreFrom ? 'Critics' : 'Metacritic'}</span>}
-                {g.esrb && <span className="rounded-full px-2.5 py-0.5 text-[13px] font-medium ring-1 ring-white/30 ring-inset">{g.esrb}</span>}
+                {g.age && <span className="rounded-full px-2.5 py-0.5 text-[13px] font-medium ring-1 ring-white/30 ring-inset">{g.age}</span>}
                 {g.genres.length > 0 && <span className="text-[15px] text-white/65">{g.genres.slice(0, 3).join(', ')}</span>}
               </div>
               {upcoming && <Countdown start={date} today={today} className="mt-6 short:hidden" />}
@@ -103,7 +94,7 @@ export default async function GamePage({ params }: Props) {
         <div className="wrap grid grid-cols-1 gap-12 py-12 md:py-16 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-16">
           <div className="min-w-0 space-y-14">
             {g.description && <Part id="about" title="About"><About text={g.description} title={g.name} /></Part>}
-            {g.trailer && <Part id="trailer" title="Trailer"><video controls preload="none" poster={g.trailer.preview} src={g.trailer.src} className="aspect-video w-full rounded-panel bg-black" /></Part>}
+            {g.trailer && <Part id="trailer" title="Trailer"><Trailer trailer={g.trailer} title={g.name} /></Part>}
             {g.screenshots.length > 0 && <Part id="shots" title="Screenshots"><Gallery shots={g.screenshots} name={g.name} /></Part>}
             {!g.description && !g.trailer && !g.screenshots.length && <p className="text-lg text-muted">No description or media yet. They usually appear closer to launch.</p>}
           </div>
@@ -115,21 +106,17 @@ export default async function GamePage({ params }: Props) {
                 </ul>
               </Panel>
             )}
-            {details.length > 0 && (
-              <Panel title="Details">
-                <dl className="-my-1 divide-y divide-line/10">
-                  {details.map(([k, v]) => <div key={k} className="flex justify-between gap-4 py-3 text-[15px]"><dt className="text-muted">{k}</dt><dd className="text-right font-medium">{v}</dd></div>)}
-                </dl>
-              </Panel>
-            )}
+            <Panel title="Details">
+              <dl className="-my-1 divide-y divide-line/10">
+                {details.map(([k, v]) => <div key={k} className="flex justify-between gap-4 py-3 text-[15px]"><dt className="text-muted">{k}</dt><dd className="text-right font-medium">{v}</dd></div>)}
+              </dl>
+            </Panel>
             {g.tags.length > 0 && (
-              <Panel title="Tags">
-                <ul className="flex flex-wrap gap-1.5">{g.tags.map((t) => <li key={t} className="rounded-full px-3 py-1 text-[13px] text-muted ring-1 ring-line/12 ring-inset">{t}</li>)}</ul>
-              </Panel>
+              <Panel title="Tags"><ul className="flex flex-wrap gap-1.5">{g.tags.map((t) => <li key={t} className="rounded-full px-3 py-1 text-[13px] text-muted ring-1 ring-line/12 ring-inset">{t}</li>)}</ul></Panel>
             )}
           </aside>
         </div>
-        <Rail title="Around the same time" lede="Other games and tournaments within ten days of this one." items={nearby} today={today} />
+        <Rail title="Similar games" lede="Games players of this one also like." items={similar} today={today} />
       </main>
       <Footer />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld).replace(/</g, '\\u003c') }} />

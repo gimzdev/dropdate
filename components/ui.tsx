@@ -1,35 +1,27 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { type AnchorHTMLAttributes, type ReactNode, type SyntheticEvent, type TouchEvent, useEffect, useRef, useState } from 'react'
-import { drop, useSaved } from '@/lib/account'
+import { usePathname, useRouter } from 'next/navigation'
+import { type AnchorHTMLAttributes, type ReactNode, type RefObject, type SyntheticEvent, type TouchEvent, useEffect, useRef, useState } from 'react'
+import { dismiss, drop, notify, ready, setList, signOut, signedInNow, useAccount, useNotice, useSaved } from '@/lib/account'
 import { ACCOUNTS, type Ev, type Found, PLATFORMS, type Platform, ago, href, iso, longDate, monthLabel, monthShort, scoreTone, status, toDate, webcal, weekday } from '@/lib/core'
-import { AccountMenu, useOutside } from './account'
-import { Heart, Icon } from './icons'
-import { Logo } from './logo'
+import { Heart, Icon, Logo } from './icons'
 
-export { Heart, Icon, useOutside, useSaved }
+export { Heart, Icon, useSaved }
 
-// ── Marks ──
-
-/** The loop you draw around a date on a wall calendar. It marks today, and nothing else. */
 export const Circled = ({ className = '' }: { className?: string }) => (
   <svg viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true" className={`pointer-events-none absolute text-mark ${className}`}>
     <path d="M58 6C30 3 6 17 6 39c0 22 22 36 48 35 26-1 41-17 40-36C93 19 77 6 47 9" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
   </svg>
 )
 
-// ── State shared across the page ──
 
-/** Pages are rendered on the server with its date; the browser then switches to the visitor's own today. */
+/** Pages render on the server with its date; the browser then switches to the visitor's own today. */
 export function useToday(server: string) {
   const [today, setToday] = useState(server)
   useEffect(() => setToday(iso(new Date())), [])
   return today
 }
-
-/** The time in the browser, refreshed every `ms` (undefined while rendering on the server). */
 function useNow(ms: number) {
   const [now, setNow] = useState<number>()
   useEffect(() => {
@@ -39,8 +31,6 @@ function useNow(ms: number) {
   }, [ms])
   return now
 }
-
-/** Touch handlers that call `go(1)` or `go(-1)` on a horizontal swipe longer than `min` pixels. */
 export function useSwipe(go: (d: number) => void, min: number) {
   const x = useRef<number | null>(null)
   return {
@@ -53,8 +43,16 @@ export function useSwipe(go: (d: number) => void, min: number) {
     },
   }
 }
-
-/** Games RAWG knows by the name `q` ('' = none), asked once typing pauses; the last answer stays while the next loads. */
+/** While `on`, a press (and with `focus`, the keyboard landing) anywhere outside `box` calls `away`. */
+export function useOutside(box: RefObject<HTMLElement | null>, on: boolean, away: () => void, focus = false) {
+  useEffect(() => {
+    if (!on) return
+    const f = (e: Event) => { if (!box.current?.contains(e.target as Node)) away() }
+    document.addEventListener('pointerdown', f)
+    if (focus) document.addEventListener('focusin', f)
+    return () => { document.removeEventListener('pointerdown', f); document.removeEventListener('focusin', f) }
+  }, [on])
+}
 export function useLookup(q: string) {
   const [found, setFound] = useState<Found[] | null>(null), [failed, setFailed] = useState(false)
   useEffect(() => {
@@ -76,7 +74,6 @@ export function useLookup(q: string) {
 // Jumping to the calendar section from anywhere: search, the wishlist, a given day
 export interface ExploreIntent { list?: boolean; day?: string; focus?: boolean }
 export const EXPLORE_EVENT = 'dropdate:explore'
-
 export function useExplore() {
   const router = useRouter()
   return (intent: ExploreIntent) => {
@@ -94,10 +91,8 @@ export function useExplore() {
   }
 }
 
-// ── Small pieces ──
 
 type OpenProps = { e: Pick<Ev, 'slug' | 'url'>; className?: string; children: ReactNode } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'className' | 'children'>
-/** A game opens its page here; a tournament opens its own page in a new tab. */
 export const Open = ({ e, className, children, ...rest }: OpenProps) =>
   e.slug ? <Link href={href(e)} className={className} {...rest}>{children}</Link>
     : <a href={e.url ?? '#'} target="_blank" rel="noopener noreferrer" className={className} {...rest}>{children}</a>
@@ -108,10 +103,8 @@ export const fallback = (ev: SyntheticEvent<HTMLImageElement>) => {
   if (original !== img.src) img.src = original
   else img.style.visibility = 'hidden'
 }
-/** Artwork, loaded lazily, with the fallback above. */
 export const Img = ({ src, className }: { src: string; className: string }) => <img src={src} alt="" loading="lazy" decoding="async" onError={fallback} className={className} />
 
-/** Artwork for a game, a league logo on a cyan glow for a tournament. */
 export const Thumb = ({ e, className = '' }: { e: Pick<Ev, 'thumb' | 'kind'>; className?: string }) =>
   e.kind === 'tournament' ? (
     <span className={`tile-arena grid shrink-0 place-items-center overflow-hidden ${className}`}>
@@ -119,9 +112,8 @@ export const Thumb = ({ e, className = '' }: { e: Pick<Ev, 'thumb' | 'kind'>; cl
     </span>
   ) : e.thumb ? <Img src={e.thumb} className={`block shrink-0 bg-raised object-cover ${className}`} /> : <span className={`block shrink-0 bg-raised ${className}`} />
 
-// [box, day, TBA, month] for each size
+// [box, day, TBA, month] per size
 const DATE = { sm: ['min-w-7', 'text-[23px]', 'text-[15px]', 'mt-0.5 text-[10.5px]'], md: ['min-w-9', 'text-[30px]', 'text-[19px]', 'mt-0.5 text-[11.5px]'], lg: ['min-w-14', 'text-[52px]', 'text-[30px]', 'mt-1 text-[13px]'] }
-/** How every event on Dropdate is dated: the day as a big condensed numeral over its month, like a calendar page. */
 export function DateBlock({ start, tba, size = 'md' }: { start: string; tba?: boolean; size?: keyof typeof DATE }) {
   const [box, num, tbaSize, mon] = DATE[size]
   return (
@@ -132,8 +124,6 @@ export function DateBlock({ start, tba, size = 'md' }: { start: string; tba?: bo
     </span>
   )
 }
-
-/** The day as a huge numeral beside its month and weekday, over hero artwork. With a label for screen readers, it's a paragraph. */
 export function BigDate({ date, tba, size, unknown, label }: { date: string; tba?: boolean; size: string; unknown: string; label?: string }) {
   const Tag = label ? 'p' : 'div'
   return (
@@ -145,7 +135,8 @@ export function BigDate({ date, tba, size, unknown, label }: { date: string; tba
   )
 }
 
-/** A heart on artwork, a quiet heart in lists, or a labelled button: the wishlist. */
+const signInHref = (path: string) => (path.startsWith('/signin') ? '/signin' : `/signin?next=${encodeURIComponent(path)}`)
+
 export function SaveButton({ id, title, label, variant = 'art', needsAccount }: { id: string; title: string; label?: boolean; variant?: 'art' | 'glass' | 'plain'; needsAccount?: boolean }) {
   const { has, toggle, signedIn, phase } = useSaved(), router = useRouter()
   const on = has(id), [bump, setBump] = useState(0)
@@ -154,7 +145,7 @@ export function SaveButton({ id, title, label, variant = 'art', needsAccount }: 
     onClick: (ev: { preventDefault(): void; stopPropagation(): void }) => {
       ev.preventDefault()
       ev.stopPropagation()
-      const signIn = () => router.push(`/signin?next=${encodeURIComponent(location.pathname + location.search)}`) // back to the same filters, not only the same page
+      const signIn = () => router.push(signInHref(location.pathname + location.search)) // back to the same filters, not only the same page
       if (needsAccount && !signedIn && phase !== 'loading') return signIn() // a game the calendar does not hold can only be kept in an account
       setBump((n) => n + 1)
       void toggle(id, needsAccount).then((done) => { if (!done) signIn() })
@@ -175,7 +166,6 @@ export function Updated({ at }: { at: string }) {
   return <>{now === undefined ? 'recently' : ago(at)}</>
 }
 
-/** A page section: a big title, a lede and an optional action on the right, over its content. Titled by id, or labelled by its title. */
 export function Section({ id, title, lede, action, className = 'border-t border-line/10 py-14 md:py-20', children }: { id?: string; title: string; lede?: ReactNode; action?: ReactNode; className?: string; children: ReactNode }) {
   const head = id ? `${id}-title` : undefined
   return (
@@ -191,7 +181,6 @@ export function Section({ id, title, lede, action, className = 'border-t border-
   )
 }
 
-/** A dropdown; anything but its first option (the default) is highlighted. */
 export function Select<T extends string>({ label, value, onChange, options, className = '' }: { label: string; value: T; onChange: (v: T) => void; options: string[][]; className?: string }) {
   return (
     <span className="relative shrink-0">
@@ -204,26 +193,21 @@ export function Select<T extends string>({ label, value, onChange, options, clas
   )
 }
 
-/** The sticky bar of filters under a search box: it scrolls sideways on narrow screens, `end` stays put on the right. */
-export function FilterBar({ children, end }: { children: ReactNode; end: ReactNode }) {
-  return (
-    <div className="sticky top-[65px] z-30 -mx-4 mt-8 border-y border-line/10 bg-black/85 px-4 py-2.5 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:top-[76px] lg:mx-0 lg:rounded-full lg:border lg:px-2.5 lg:py-2">
-      <div className="flex items-center gap-3">
-        <div className="no-scrollbar -my-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1 [mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] xl:[mask-image:none]">{children}</div>
-        {end}
-      </div>
+export const FilterBar = ({ children, end }: { children: ReactNode; end: ReactNode }) => (
+  <div className="sticky top-[65px] z-30 -mx-4 mt-8 border-y border-line/10 bg-black/85 px-4 py-2.5 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:top-[76px] lg:mx-0 lg:rounded-full lg:border lg:px-2.5 lg:py-2">
+    <div className="flex items-center gap-3">
+      <div className="no-scrollbar -my-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1 [mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] xl:[mask-image:none]">{children}</div>
+      {end}
     </div>
-  )
-}
+  </div>
+)
 export const Sep = () => <span aria-hidden className="mx-1 h-6 w-px shrink-0 bg-line/12" />
-/** One platform at a time; pressing the chosen one again clears it. */
 export const PlatformPills = ({ value, onChange }: { value: string; onChange: (p: Platform | '') => void }) => (
   <div role="group" aria-label="Platform" className="flex shrink-0 gap-1.5">
     {PLATFORMS.map((p) => <button key={p} type="button" onClick={() => onChange(value === p ? '' : p)} aria-pressed={value === p} className="pill">{p}</button>)}
   </div>
 )
 
-/** A live calendar feed: Google Calendar, Apple or Outlook, or the link to copy. */
 export function FeedPanel({ feed, title, as: H = 'h3', className, children }: { feed: string; title: ReactNode; as?: 'h2' | 'h3'; className: string; children: ReactNode }) {
   const [copied, setCopied] = useState(''), done = !!copied && copied === feed
   const copy = async () => {
@@ -248,7 +232,7 @@ export function FeedPanel({ feed, title, as: H = 'h3', className, children }: { 
 
 // ── Header ──
 
-/** The logo: on the home page it scrolls to the very top (clearing any #section or ?search); anywhere else it goes home. */
+/** On the home page the logo scrolls to the very top (clearing any #section or ?search); elsewhere it goes home. */
 export function HomeLink({ className, children }: { className?: string; children: ReactNode }) {
   return (
     <Link href="/" aria-label="Dropdate, home" className={className} onClick={(e) => {
@@ -260,9 +244,8 @@ export function HomeLink({ className, children }: { className?: string; children
   )
 }
 
-const NAV = [['This week', '/#week'], ['Upcoming', '/#upcoming'], ['Esports', '/#esports'], ['Calendar', '/#explore'], ['Browse', '/browse'], ['API', '/docs']]
+const NAV = [['This week', '/#week'], ['Upcoming', '/#upcoming'], ['Esports', '/#esports'], ['Calendar', '/#explore'], ['Browse', '/browse']]
 
-/** Without accounts there is no profile: the wishlist opens in the calendar. */
 function WishlistButton({ className, onClick }: { className: string; onClick: () => void }) {
   const { ids } = useSaved()
   return (
@@ -274,13 +257,52 @@ function WishlistButton({ className, onClick }: { className: string; onClick: ()
   )
 }
 
+/** Sign in, or the account menu. Until the browser knows, both are in the page and the CSS shows the right one (no flash). */
+function AccountMenu({ className }: { className: string }) {
+  const account = useAccount(), path = usePathname()
+  const [open, setOpen] = useState(false), box = useRef<HTMLDivElement>(null)
+  useEffect(() => setOpen(false), [path])
+  useOutside(box, open, () => setOpen(false))
+  useEffect(() => {
+    if (!open) return
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); box.current?.querySelector('button')?.focus() } }
+    document.addEventListener('keydown', key)
+    return () => document.removeEventListener('keydown', key)
+  }, [open])
+
+  const slim = `${className} w-9 px-0 sm:w-auto sm:px-4`, link = <><Icon name="user" /><span className="hidden sm:inline">Sign in</span></>
+  if (account.phase === 'idle' || account.phase === 'loading') return (
+    <>
+      <Link href={signInHref(path)} className={`${slim} signed:hidden`}>{link}</Link>
+      <span aria-hidden className={`${className} pointer-events-none hidden w-9 px-0 opacity-60 signed:inline-flex`}><Icon name="user" /></span>
+    </>
+  )
+  if (account.phase === 'out') return <Link href={signInHref(path)} className={slim}>{link}</Link>
+  const item = 'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium text-muted transition hover:bg-raised hover:text-fg'
+  return (
+    <div ref={box} className="relative" onBlur={(e) => { if (open && !box.current?.contains(e.relatedTarget as Node | null)) setOpen(false) }}>
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls="account-menu" aria-label={`Account, ${account.email}`} className={`${className} w-9 px-0`}>
+        <span aria-hidden className="text-[15px] font-bold uppercase">{account.email.slice(0, 1)}</span>
+      </button>
+      {open && (
+        <div id="account-menu" className="absolute top-full right-0 z-50 mt-2 w-64 rounded-2xl bg-panel p-1.5 text-fg shadow-2xl ring-1 ring-line/12 ring-inset">
+          <p className="truncate px-3 pt-2 pb-2.5 text-[13px] text-dim" title={account.email}>{account.email}</p>
+          <Link href="/profile" onClick={() => setOpen(false)} className={item}><Icon name="pad" />Your games</Link>
+          <div className="my-1.5 border-t border-line/10" />
+          <button type="button" onClick={() => void signOut()} className={item}><Icon name="logout" />Sign out</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Header({ overHero = false }: { overHero?: boolean }) {
   const explore = useExplore()
   const [scrolled, setScrolled] = useState(false), [open, setOpen] = useState(false), bar = useRef<HTMLElement>(null)
-  useOutside(bar, open, () => setOpen(false)) // the menu that drops down on a phone closes with a press anywhere outside the header
+  useOutside(bar, open, () => setOpen(false))
   useEffect(() => {
     const onScroll = () => setScrolled(scrollY > 12)
-    const onKey = (e: KeyboardEvent) => { // "/" or Ctrl/Cmd+K jumps to search, unless you're typing somewhere
+    const onKey = (e: KeyboardEvent) => { // "/" or Ctrl/Cmd+K jumps to search, unless you are typing somewhere
       const el = document.activeElement as HTMLElement | null, typing = !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable)
       if ((e.key === '/' && !typing) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) { e.preventDefault(); setOpen(false); explore({ focus: true }) }
       else if (e.key === 'Escape') setOpen(false)
@@ -293,7 +315,6 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
   const clear = overHero && !scrolled && !open // see-through over the hero artwork
   const ctl = `btn btn-sm ${clear ? 'btn-glass' : 'btn-line'}`
   const go = (intent: ExploreIntent) => { setOpen(false); explore(intent) }
-
   return (
     <header ref={bar} className={`fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300 ${clear ? 'border-transparent bg-linear-to-b from-black/55 to-transparent bg-origin-border' : 'border-line/10 bg-black/85 backdrop-blur-xl'}`}>
       <div className="wrap flex h-16 items-center gap-2">
@@ -320,19 +341,57 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
   )
 }
 
-// ── Card ──
 
-/** The Metacritic score as a coloured tag, just the number: green from 75, yellow from 50, red below. Screen readers hear what it is. */
-export function Score({ n, className = '' }: { n: number; className?: string }) {
-  return <span title={`Metacritic score: ${n} out of 100`} className={`tag ${scoreTone(n)} ${className}`}>{n}<span className="sr-only"> on Metacritic</span></span>
+/** Played and Completed (completing marks both, un-playing clears both); signed out, they go to sign in and back. */
+export function Progress({ id, title }: { id: string; title: string }) {
+  const account = useAccount(), router = useRouter(), path = usePathname()
+  const played = account.played.includes(id), done = account.completed.includes(id), settled = account.phase === 'out' || account.phase === 'in'
+  const click = async (list: 'played' | 'completed', on: boolean) => {
+    await ready()
+    if (!signedInNow()) return router.push(signInHref(path))
+    if ((await setList(list, id, on)) && list === 'completed' && on) notify(`${title} completed.`)
+  }
+  const part = (on: boolean) => `btn ${on ? 'bg-go/20 text-go ring-1 ring-go/50 ring-inset hover:bg-go/30' : 'btn-glass'}`
+  return (
+    <div role="group" aria-label="Your progress" className={`inline-flex ${settled ? '' : 'invisible'}`}>
+      <button type="button" onClick={() => void click('played', !played)} aria-pressed={played} title={played ? 'You have played this' : 'Add to the games you have played'} aria-label={`Played: ${title}`}
+        className={`${part(played)} rounded-r-none pr-4`}>
+        <Icon name={played ? 'check' : 'pad'} />Played
+      </button>
+      <button type="button" onClick={() => void click('completed', !done)} aria-pressed={done} title={done ? 'You have completed this' : 'Mark as completed'} aria-label={`Completed: ${title}`}
+        className={`${part(done)} -ml-px rounded-l-none pl-4`}>
+        <span key={String(done)} className={`inline-flex ${done ? 'animate-pop' : ''}`}><Icon name={done ? 'check' : 'flag'} /></span>Completed
+      </button>
+    </div>
+  )
 }
+
+/** A short message at the bottom of the screen; the region stays in the page so screen readers announce it. */
+export function Notice() {
+  const message = useNotice()
+  return (
+    <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-4">
+      {message && (
+        <div className="pointer-events-auto flex max-w-md animate-enter items-center gap-3 rounded-2xl bg-fg py-2.5 pr-2.5 pl-5 text-[15px] leading-snug font-medium text-black shadow-2xl">
+          <span>{message}</span>
+          <button type="button" onClick={dismiss} aria-label="Dismiss" className="grid h-7 w-7 shrink-0 place-items-center rounded-full transition hover:bg-black/10"><Icon name="close" className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+export const Score = ({ n, className = '' }: { n: number; className?: string }) => (
+  <span title={`Critic score: ${n} out of 100`} className={`tag ${scoreTone(n)} ${className}`}>{n}<span className="sr-only"> critic score</span></span>
+)
 
 // Out today in green (a live tournament in red), the coming week in yellow, later in grey
 export const TONE = { live: 'text-go', soon: 'text-mark', future: 'text-muted', past: 'text-dim' }
 
 type Shots = Record<string, string[]>
 let shotMap: Promise<Shots> | undefined
-/** The home page leaves screenshots out of its payload (most of its weight): they come in one go, once the page is idle on a screen that can hover. */
+/** The home page leaves screenshots out (most of its weight): they come in one go when the page is idle, on screens that hover. */
 const loadShots = () => (shotMap ??= fetch('/api/shots').then((r): Promise<Shots> | Shots => (r.ok ? r.json() : {})).catch((): Shots => { shotMap = undefined; return {} }))
 export const warmShots = () => { if (matchMedia('(hover: hover)').matches) (window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 1500)))(() => void loadShots()) }
 
@@ -343,8 +402,8 @@ export const warmShots = () => { if (matchMedia('(hover: hover)').matches) (wind
 export function Card({ e, today, row, when, outside, lazy }: { e: Ev; today: string; row?: boolean; when?: string; outside?: boolean; lazy?: boolean }) {
   const esport = e.kind === 'tournament', s = status(e, today)
   const [shots, setShots] = useState<string[]>(), [on, setOn] = useState(false), [frame, setFrame] = useState(0)
-  const frames = !esport && e.thumb ? [e.thumb, ...(shots ?? e.shots)] : []
-  useEffect(() => { // hovering a game flips through its screenshots
+  const frames = !esport && e.thumb ? [e.thumb, ...(shots ?? e.shots ?? [])] : []
+  useEffect(() => {
     if (!on || frames.length < 2) return setFrame(0)
     setFrame(1)
     const t = setInterval(() => setFrame((n) => (n + 1) % frames.length), 1100)
@@ -352,7 +411,6 @@ export function Card({ e, today, row, when, outside, lazy }: { e: Ev; today: str
   }, [on, frames.length])
   const play = () => { setOn(true); if (lazy && !shots && frames.length) void loadShots().then((m) => setShots(m[e.id] ?? [])) }
   const stop = () => setOn(false)
-
   return (
     <article className="group relative" onMouseEnter={play} onMouseLeave={stop}>
       <Open e={e} className={row ? 'flex gap-3.5 rounded-art sm:block' : 'block rounded-art'} onFocus={play} onBlur={stop}>
@@ -387,10 +445,8 @@ export function Card({ e, today, row, when, outside, lazy }: { e: Ev; today: str
   )
 }
 
-// ── Countdown ──
-
 export function Countdown({ start, today, className = '' }: { start: string; today: string; className?: string }) {
-  const now = useNow(3e4), day = now === undefined ? today : iso(new Date(now)) // flips to "Out today" at midnight without a reload
+  const now = useNow(3e4), day = now === undefined ? today : iso(new Date(now)) // turns to "Out today" at midnight without a reload
   if (start <= day) return <p className={`inline-flex items-center gap-2 text-[17px] font-semibold text-go ${className}`}><span className="h-2 w-2 rounded-full bg-go" />{start === day ? 'Out today' : 'Out now'}</p>
   const ms = Math.max(0, toDate(start).getTime() - (now ?? 0)), d = Math.floor(ms / 864e5), h = Math.floor((ms % 864e5) / 36e5), m = Math.floor((ms % 36e5) / 6e4)
   const parts: [string, string][] = now === undefined

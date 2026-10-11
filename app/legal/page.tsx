@@ -13,32 +13,27 @@ const PLACES: Record<string, string> = {
 }
 const li = 'pl-1'
 
-/** Turns the addresses and links inside a line of text into links, and leaves the rest as it is. */
-function linked(text: string): ReactNode[] {
-  return text.split(/(https?:\/\/[^\s,;<>]+|[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+)/g).map((part, i) =>
-    i % 2 === 0 ? part : part.includes('@') && !part.startsWith('http') ? <a key={i} href={`mailto:${part}`}>{part}</a> : <A key={i} to={part}>{part}</A>)
-}
-
-/** Who runs the site and how to reach them about personal data: whatever the owner wrote in PRIVACY_CONTACT (a name and an email address or link). */
+/** PRIVACY_CONTACT, its addresses and links made clickable. */
 function Contact() {
   const c = (process.env.PRIVACY_CONTACT || '').trim()
   if (!c) return <A to={REPO}>the owner of this site (see the project page on GitHub)</A>
-  return <>{linked(c)}</>
+  return <>{c.split(/(https?:\/\/[^\s,;<>]+|[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+)/g).map((part, i): ReactNode =>
+    i % 2 === 0 ? part : part.includes('@') && !part.startsWith('http') ? <a key={i} href={`mailto:${part}`}>{part}</a> : <A key={i} to={part}>{part}</A>)}</>
 }
 
 export default function Legal() {
   const region = neonRegion(process.env.DATABASE_URL || ''), place = PLACES[region] ?? (region ? `the ${region} region` : 'the region chosen when the database was created')
   return (
-    <Doc title="Terms and privacy" intro="Plain policies for using Dropdate and its API." toc={ACCOUNTS ? [['terms', 'Terms of use'], ['privacy', 'Privacy in short'], ['keep', 'What is stored'], ['who', 'Who handles it'], ['rights', 'Your rights'], ['source', 'Open source']] : undefined}>
+    <Doc title="Terms and privacy" intro="Plain policies for using Dropdate." toc={ACCOUNTS ? [['terms', 'Terms of use'], ['privacy', 'Privacy in short'], ['keep', 'What is stored'], ['who', 'Who handles it'], ['rights', 'Your rights'], ['source', 'Open source']] : undefined}>
       <DocSection id="terms" title="Terms of use">
         <div className="prose-dd">
           <p>Dropdate is provided as is, without warranty. Dates, scores and details come from third-party sources and can change, so confirm with the official source before planning around them.</p>
-          <p><strong>You can</strong> use the API, copy the code, fork the project, build commercial applications on it and contribute back.</p>
-          <p><strong>Please don’t</strong> flood the API with requests, or use it for spam or anything illegal.</p>
+          <p><strong>You can</strong> copy the code, fork the project, build commercial applications on it and contribute back.</p>
+          <p><strong>Please don’t</strong> use the site for spam, to overload it with automated requests, or for anything illegal.</p>
           {ACCOUNTS && (
             <>
               <p><strong>Accounts</strong> are free and for people aged 16 or older. One account is one email address. Your lists are yours: Dropdate does not show them to anyone else. You can delete the account whenever you like, and we may close one that is used to abuse the service.</p>
-              <p><strong>Metacritic scores</strong> are shown as reported by RAWG and Steam. Where a game has none, the average of critics’ reviews from IGDB may be shown instead, and is labelled as such on the game’s page. Metacritic is a trademark of its owner, and Dropdate is not affiliated with it.</p>
+              <p><strong>Scores</strong> are Metacritic’s where Steam reports one, and otherwise the average of critics’ reviews from IGDB, which the game’s page labels as such. Metacritic is a trademark of its owner, and Dropdate is not affiliated with it.</p>
             </>
           )}
         </div>
@@ -78,7 +73,7 @@ export default function Legal() {
                 <li className={li}><strong><A to="https://resend.com/legal/privacy-policy">Resend</A></strong> delivers the sign-in email, so it sees your email address and the code, and keeps its own delivery logs for a short time.</li>
                 <li className={li}><strong>Google or Discord</strong>, only if you choose to sign in with them.</li>
                 <li className={li}><strong>Your calendar app</strong>, only if you subscribe it to your wishlist link.</li>
-                <li className={li}><strong><A to="https://rawg.io">RAWG</A>, <A to="https://store.steampowered.com">Steam</A> and <A to="https://pandascore.co">PandaScore</A>, and <A to="https://www.igdb.com">IGDB</A> (run by Twitch) where it is switched on</strong> supply game and esports data. Your browser loads artwork straight from their servers, which can see your IP address, like any website you visit. Nothing about your account goes to them. When you search for a game by name, the words you typed go from our server to RAWG (and IGDB, where switched on), without your address.</li>
+                <li className={li}><strong><A to="https://www.igdb.com">IGDB</A> (run by Twitch), <A to="https://store.steampowered.com">Steam</A> and <A to="https://pandascore.co">PandaScore</A></strong> supply game and esports data. Your browser loads artwork straight from their servers, which can see your IP address, like any website you visit. Nothing about your account goes to them. When you search for a game by name, the words you typed go from our server to IGDB and Steam, without your address. <strong><A to="https://www.youtube.com/t/terms">YouTube</A></strong> loads a trailer only when you press play on it.</li>
               </ul>
               <p>Some of these companies work in the United States and elsewhere, and rely on the safeguards the law allows, such as standard contractual clauses, when data travels.</p>
             </div>
@@ -104,7 +99,7 @@ export default function Legal() {
             <p><strong>No accounts.</strong> Dropdate never asks for or stores personal information.</p>
             <p><strong>On your device.</strong> Your saved list lives in your browser’s local storage and never leaves it. Your search is kept in the page address so you can share it.</p>
             <p><strong>Server logs.</strong> The hosting provider may keep standard request logs, such as IP addresses, for security and operations.</p>
-            <p><strong>Third parties.</strong> Game data and artwork come from <A to="https://rawg.io">RAWG</A> and <A to="https://store.steampowered.com">Steam</A>, esports data from <A to="https://pandascore.co">PandaScore</A>, and more game data and critics’ scores from <A to="https://www.igdb.com">IGDB</A> where it is switched on. Your browser loads images straight from their servers. When you search for a game by name, the words you typed go from our server to RAWG, without your address. Game names, logos and images belong to their owners.</p>
+            <p><strong>Third parties.</strong> Game data, artwork and critics’ scores come from <A to="https://www.igdb.com">IGDB</A> and <A to="https://store.steampowered.com">Steam</A>, esports data from <A to="https://pandascore.co">PandaScore</A>. Your browser loads images straight from their servers, and a trailer from YouTube only when you press play. When you search for a game by name, the words you typed go from our server to IGDB and Steam, without your address. Game names, logos and images belong to their owners.</p>
           </div>
         </DocSection>
       )}

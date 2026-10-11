@@ -1,13 +1,11 @@
-// Smart search, shared by the calendar in the browser and the API: plain-English filters, then typo-tolerant text.
-// Its own module so that only the pages with a search box download it.
-
+// Smart search for the calendar, in the browser and the API: plain-English filters, then typo-tolerant text.
 import { type Ev, FRANCHISES, type Kind, type Platform, iso, monthLabel, shift, toDate } from './core'
 
 export interface Chip { label: string; raw: string }
 interface Parsed { kinds: Kind[]; platforms: Platform[]; range?: [string, string]; past: boolean; text: string; chips: Chip[] }
 
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
-/** A month from one word: its short name (oct), the name typed so far (octo) or a typo of it (ocotber, octobre). */
+/** A month from one word: its short name (oct), the start of it (octo) or a typo (ocotber, octobre). */
 function monthOf(w: string) {
   w = w.toLowerCase()
   const short = MONTHS.findIndex((m) => m.slice(0, 3) === w)
@@ -29,7 +27,7 @@ export function parse(input: string, today: string): Parsed {
   const t = toDate(today), Y = t.getFullYear(), M = t.getMonth(), mon = t.getDate() - ((t.getDay() + 6) % 7)
   const out: Parsed = { kinds: [], platforms: [], past: false, text: '', chips: [] }
   let rest = ` ${input} `
-  const cut = (m: RegExpMatchArray, label: string) => { // removes the phrase from the text and shows it as a chip
+  const cut = (m: RegExpMatchArray, label: string) => { // takes the phrase out of the text and shows it as a chip
     rest = `${rest.slice(0, m.index)} ${rest.slice((m.index ?? 0) + m[0].length)}`
     out.chips.push({ label, raw: m[0].trim() })
   }
@@ -62,7 +60,7 @@ export function parse(input: string, today: string): Parsed {
   }
   const named = out.range ? undefined : [...rest.matchAll(/\b(?:(?:in|during|for)\s+)?([a-z]{3,10})\b(?:\s+(20\d\d))?/gi)].find((x) => monthOf(x[1]) >= 0)
   if (named) {
-    const i = monthOf(named[1]), y = named[2] ? +named[2] : d(Y, i + 1, 0) < shift(today, -60) ? Y + 1 : Y // a month we hold recent releases for stays this year
+    const i = monthOf(named[1]), y = named[2] ? +named[2] : d(Y, i + 1, 0) < shift(today, -60) ? Y + 1 : Y // a month with recent releases stays this year
     cut(named, monthLabel(d(y, i, 1).slice(0, 7)))
     out.range = [d(y, i, 1), d(y, i + 1, 0)]
   } else if (!out.range) {
@@ -79,9 +77,9 @@ export function parse(input: string, today: string): Parsed {
 export const removeChip = (q: string, c: Chip) =>
   q.replace(new RegExp(`\\b${c.raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'), ' ').replace(/\s+/g, ' ').trim()
 
-const fold = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ'’]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+const fold = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f'’]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 
-/** Edit distance counting swapped letters as one edit; gives up as soon as it passes `max`. */
+/** Edit distance, a swap of two letters counting as one edit; gives up past `max`. */
 function dist(a: string, b: string, max: number) {
   if (Math.abs(a.length - b.length) > max) return max + 1
   let older: number[] = [], prev = Array.from({ length: b.length + 1 }, (_, j) => j)
@@ -100,7 +98,6 @@ function dist(a: string, b: string, max: number) {
 }
 
 const ROMAN: Record<string, string> = { ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8', ix: '9', x: '10' }
-/** What a search matches an event against, worked out once per event: its folded title, the title and genre words, the initials. */
 const HAY = new WeakMap<Ev, { title: string; hay: string; parts: string[]; initials: string }>()
 function hay(e: Ev) {
   let h = HAY.get(e)
@@ -111,19 +108,18 @@ function hay(e: Ev) {
   }
   return h
 }
-
-/** Every word must land in the title or genres: as text, as the title's initials (gta, re4), or within a typo or two. */
-function hit(e: Ev, words: string[]) {
+/** Every word lands in the title or genres: as text, as the title's initials (gta, re4), or within a typo or two. */
+const hit = (e: Ev, words: string[]) => {
   const h = hay(e)
   return words.every((w) => {
     const max = w.length > 7 ? 2 : 1
-    return h.hay.includes(w) || (ALIASES[w] && h.hay.includes(ALIASES[w])) || (FRANCHISES[w] && h.hay.includes(FRANCHISES[w])) || (w.length > 1 && h.initials.includes(w)) || (w.length > 3 && h.parts.some((p) => dist(w, p, max) <= max || dist(w, p.slice(0, w.length), 1) <= 1))
+    return h.hay.includes(w) || (ALIASES[w] && h.hay.includes(ALIASES[w])) || (FRANCHISES[w] && h.hay.includes(FRANCHISES[w])) || (w.length > 1 && h.initials.includes(w))
+      || (w.length > 3 && h.parts.some((p) => dist(w, p, max) <= max || dist(w, p.slice(0, w.length), 1) <= 1))
   })
 }
 
 interface Opts { kind?: Kind | 'all'; platform?: Platform | 'all'; genre?: string; from?: string; to?: string; past?: boolean }
 
-/** Plain English + fuzzy filter, shared by the site and the API. Upcoming first, or most recent first for past events. */
 export function search(events: Ev[], q: string, today: string, o: Opts = {}) {
   // A phrase that is part of a title is a title search: "final fantasy", "the finals", "asian games" are not filters
   const phrase = fold(q), titled = phrase.includes(' ') && events.some((e) => hay(e).title.includes(phrase))

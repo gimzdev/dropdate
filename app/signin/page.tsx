@@ -6,7 +6,7 @@ import { Footer } from '@/components/site'
 import { Header } from '@/components/ui'
 import { me, methods } from '@/lib/auth'
 import { ACCOUNTS, safeNext } from '@/lib/core'
-import { devCodes } from '@/lib/mail'
+import { devCodes } from '@/lib/db'
 
 export const metadata: Metadata = { title: 'Sign in', robots: { index: false, follow: false } }
 export const dynamic = 'force-dynamic'
@@ -16,8 +16,7 @@ const first = (v?: string | string[]) => (Array.isArray(v) ? v[0] : v)
 
 export default async function SignInPage({ searchParams }: Props) {
   if (!ACCOUNTS) notFound()
-  const sp = await searchParams, next = safeNext(first(sp.next))
-  const signedIn = !!(await me(await headers(), { render: true }).catch(() => null))
+  const sp = await searchParams, next = safeNext(first(sp.next)), signedIn = !!(await me(await headers(), { render: true }).catch(() => null))
   return (
     <>
       <Header />

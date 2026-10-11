@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
-import { NO_STORE, fail, guard } from '@/lib/guard'
-import { deleteAccount, libraryKeys } from '@/lib/library'
+import { NO_STORE, auth, fail, guard } from '@/lib/auth'
+import { deleteAccount, exportData, libraryKeys } from '@/lib/library'
 
-// Who you are and what you have marked (every button on the site reads this once), and deleting your account
+// GET /api/me: who you are and what you have marked (every button on the site reads it once). GET /api/me/export: everything held
+// about you, as a file. DELETE /api/me: the account, for good.
 export const dynamic = 'force-dynamic'
+type Ctx = { params: Promise<{ sub?: string[] }> }
 
-export async function GET(req: Request) {
-  const user = await guard(req)
+export async function GET(req: Request, { params }: Ctx) {
+  const sub = (await params).sub?.join('/')
+  if (sub && sub !== 'export') return fail(404, 'Not found.')
+  const user = await guard(req, sub ? { rate: ['export', 10, 3600] } : {})
   if (user instanceof Response) return user
+  if (sub) return new NextResponse(JSON.stringify(await exportData(user), null, 2), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="dropdate-my-data.json"', ...NO_STORE } })
   try {
     return NextResponse.json({ email: user.email, since: user.since, ...(await libraryKeys(user.id)) }, { headers: NO_STORE })
   } catch (e) {
@@ -17,7 +21,8 @@ export async function GET(req: Request) {
   }
 }
 
-export async function DELETE(req: Request) {
+export async function DELETE(req: Request, { params }: Ctx) {
+  if ((await params).sub) return fail(404, 'Not found.')
   const user = await guard(req, { write: true, rate: ['delete', 5, 3600] })
   if (user instanceof Response) return user
   // Erase first (the sessions go with the account); only then is this browser told to forget its cookie

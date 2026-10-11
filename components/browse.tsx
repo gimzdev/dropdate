@@ -8,7 +8,6 @@ import { FilterBar, Icon, PlatformPills, Select, Sep } from './ui'
 
 // The browse page's controls. The server makes the list for the address in the bar: these only change the address.
 
-/** The search box and the filters; what the page found goes inside, and dims while a new answer is on its way. */
 export function BrowseShell({ query, thisYear, children }: { query: BrowseQuery; thisYear: number; children: ReactNode }) {
   const router = useRouter(), [pending, start] = useTransition(), [text, setText] = useState(query.q)
   // the controls show where the page is heading: an answer can take a second, and the next change builds on the last
@@ -18,17 +17,16 @@ export function BrowseShell({ query, thisYear, children }: { query: BrowseQuery;
     ahead.current = to
     if (next.q !== undefined) sent.current = to.q
     setShown(to)
-    start(() => { if (replace) router.replace(browseHref(to), { scroll: false }); else router.push(browseHref(to), { scroll: false }) })
+    start(() => router[replace ? 'replace' : 'push'](browseHref(to), { scroll: false }))
   }
   useEffect(() => { if (!pending) { ahead.current = query; setShown(query) } }, [query, pending]) // arrived (or not): the page is the truth again
   useEffect(() => { if (query.q !== sent.current) { sent.current = query.q; setText(query.q) } }, [query.q]) // back, forward or a link, not this box
-  useEffect(() => { // typing searches after a short pause
+  useEffect(() => { // typing searches after a short pause (Enter may have searched already)
     if (text.trim() === ahead.current.q) return
-    const t = setTimeout(() => { if (text.trim() !== ahead.current.q) go({ q: text.trim() }, true) }, 400) // (Enter may have searched already)
+    const t = setTimeout(() => { if (text.trim() !== ahead.current.q) go({ q: text.trim() }, true) }, 400)
     return () => clearTimeout(t)
   }, [text])
   const years = Array.from({ length: thisYear + 2 - FIRST_YEAR + 1 }, (_, i) => [String(thisYear + 2 - i)])
-
   return (
     <>
       <form role="search" onSubmit={(e) => { e.preventDefault(); go({ q: text.trim() }) }} className="relative mt-8 max-w-3xl">
@@ -37,7 +35,6 @@ export function BrowseShell({ query, thisYear, children }: { query: BrowseQuery;
           className={`h-14 w-full rounded-full bg-panel ${text ? 'pr-24' : 'pr-5'} pl-14 text-base text-fg ring-1 ring-line/12 transition outline-none ring-inset placeholder:text-dim hover:ring-line/25 focus:ring-2 focus:ring-mark sm:h-16 sm:text-[17px] [&::-webkit-search-cancel-button]:hidden`} />
         {text && <button type="button" onClick={() => { setText(''); go({ q: '' }) }} className="btn btn-sm absolute top-1/2 right-3 -translate-y-1/2 text-muted hover:text-fg">Clear</button>}
       </form>
-
       <FilterBar end={<Select label="Sort by" value={shown.sort} onChange={(v) => go({ sort: v })} options={Object.entries(BROWSE_SORTS)} />}>
         <Select label="Year" value={shown.year || 'any'} onChange={(v) => go({ year: v === 'any' ? '' : v })} options={[['any', 'Any year'], ...years]} className="w-[122px]" />
         <Sep />
@@ -45,13 +42,11 @@ export function BrowseShell({ query, thisYear, children }: { query: BrowseQuery;
         <Sep />
         <Select label="Genre" value={shown.genre || 'any'} onChange={(v) => go({ genre: v === 'any' ? '' : v })} options={[['any', 'All genres'], ...GENRES.map(([slug, name]) => [slug, name])]} className="w-[168px]" />
       </FilterBar>
-
       <div aria-busy={pending} className={`transition-opacity duration-200 ${pending ? 'opacity-50' : ''}`}>{children}</div>
     </>
   )
 }
 
-/** Previous and next, as links: each page has an address of its own. */
 export function Pager({ query, pages }: { query: BrowseQuery; pages: number }) {
   const jump = () => document.getElementById('results')?.scrollIntoView({ block: 'start' })
   const part = (to: number, label: string, rel: 'prev' | 'next', on: boolean) => {

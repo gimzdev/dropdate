@@ -5,11 +5,10 @@ import { useRouter } from 'next/navigation'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { AuthError, confirmCode, requestCode, setSession, startProvider } from '@/lib/account'
 
-// Sign in with a six-digit code by email, or Google or Discord when the site has them. The first code creates the account.
+// Sign in with a six-digit code by email, or with Google or Discord when the site has them. The first code creates the account.
 
 export interface Methods { email: boolean; google: boolean; discord: boolean }
 type Provider = 'google' | 'discord'
-
 /** Seconds before a new code can be asked for: the server holds the same line (CODE_GAP in lib/auth.ts). */
 const WAIT = 45
 
@@ -31,14 +30,11 @@ const ERRORS: Record<string, string> = {
   NETWORK: 'No connection. Check your internet and try again.', INVALID_OTP: 'That code is not right. Check it and try again.',
   OTP_EXPIRED: 'That code has expired. Ask for a new one.', TOO_MANY_ATTEMPTS: 'Too many wrong tries. Ask for a new code.', INVALID_EMAIL: 'That email address does not look right.',
 }
-
-/** What went wrong, in words for a person. */
 function describe(e: unknown, sending: boolean) {
   if (!(e instanceof AuthError)) return 'Something went wrong. Try again.'
   if (ERRORS[e.code]) return ERRORS[e.code]
   if (e.status === 429) return sending && e.message ? e.message : 'Too many tries. Wait a minute and try again.'
-  if (e.status >= 500 && e.message) return e.message
-  return 'Something went wrong. Try again.'
+  return e.status >= 500 && e.message ? e.message : 'Something went wrong. Try again.'
 }
 
 export function SignIn({ next, methods, dev, failed }: { next: string; methods: Methods; dev: boolean; failed: boolean }) {
@@ -56,7 +52,7 @@ export function SignIn({ next, methods, dev, failed }: { next: string; methods: 
     const t = setTimeout(() => setWait((w) => w - 1), 1000)
     return () => clearTimeout(t)
   }, [wait])
-  useEffect(() => { // coming back from a provider with the Back button: the page is restored as it was left
+  useEffect(() => { // back from a provider with the Back button: the page is restored as it was left
     const back = (e: PageTransitionEvent) => { if (e.persisted) setBusy('') }
     addEventListener('pageshow', back)
     return () => removeEventListener('pageshow', back)
@@ -70,13 +66,12 @@ export function SignIn({ next, methods, dev, failed }: { next: string; methods: 
     try {
       await requestCode(to)
       toCode(again ? 'A new code is on its way.' : '')
-    } catch (e) {
-      if (e instanceof AuthError && e.code === 'CODE_FRESH') toCode('A code was just sent to this address. Enter it, or wait a moment to ask for a new one.') // it went out a moment ago and still works
+    } catch (e) { // a code that went out a moment ago still works
+      if (e instanceof AuthError && e.code === 'CODE_FRESH') toCode('A code was just sent to this address. Enter it, or wait a moment to ask for a new one.')
       else setError(describe(e, true))
     }
     setBusy('')
   }
-
   async function verify(value: string) {
     if (busy || value.length !== 6) return
     setBusy('code'); say('')
@@ -88,7 +83,6 @@ export function SignIn({ next, methods, dev, failed }: { next: string; methods: 
       codeBox.current?.focus()
     }
   }
-
   async function provider(name: Provider) {
     if (busy) return
     setBusy(name); say('')
@@ -103,10 +97,7 @@ export function SignIn({ next, methods, dev, failed }: { next: string; methods: 
       {!error && info && <p className="mt-4 rounded-xl bg-go/10 px-4 py-3 text-[15px] text-go ring-1 ring-go/30 ring-inset">{info}</p>}
     </div>
   )
-
-  if (!methods.email && !providers.length) {
-    return <p className="rounded-panel bg-panel p-6 text-muted md:p-8">Signing in is not available right now. Please try again later.</p>
-  }
+  if (!methods.email && !providers.length) return <p className="rounded-panel bg-panel p-6 text-muted md:p-8">Signing in is not available right now. Please try again later.</p>
 
   return (
     <div className="mx-auto w-full max-w-md">
@@ -114,22 +105,18 @@ export function SignIn({ next, methods, dev, failed }: { next: string; methods: 
         {step === 'email' ? (
           <>
             {methods.email && (
-              <form onSubmit={submitEmail} noValidate={false}>
+              <form onSubmit={submitEmail}>
                 <label htmlFor="email" className="text-[15px] font-semibold">Email address</label>
                 <input id="email" name="email" type="email" required autoFocus autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false}
                   placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className={`mt-2 ${field}`} />
                 <button type="submit" disabled={!!busy} className="btn btn-mark mt-4 h-12 w-full">{busy === 'email' ? 'Sending…' : 'Email me a code'}</button>
               </form>
             )}
-            {methods.email && providers.length > 0 && (
-              <div className="my-6 flex items-center gap-4 text-[13px] text-dim"><span className="h-px flex-1 bg-line/10" />or<span className="h-px flex-1 bg-line/10" /></div>
-            )}
+            {methods.email && providers.length > 0 && <div className="my-6 flex items-center gap-4 text-[13px] text-dim"><span className="h-px flex-1 bg-line/10" />or<span className="h-px flex-1 bg-line/10" /></div>}
             {providers.length > 0 && (
               <div className="grid gap-3">
                 {providers.map((p) => (
-                  <button key={p} type="button" onClick={() => void provider(p)} disabled={!!busy} className="btn btn-line h-12 w-full">
-                    {busy === p ? 'Opening…' : `Continue with ${p === 'google' ? 'Google' : 'Discord'}`}
-                  </button>
+                  <button key={p} type="button" onClick={() => void provider(p)} disabled={!!busy} className="btn btn-line h-12 w-full">{busy === p ? 'Opening…' : `Continue with ${p === 'google' ? 'Google' : 'Discord'}`}</button>
                 ))}
               </div>
             )}

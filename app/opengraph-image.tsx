@@ -1,17 +1,17 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ImageResponse } from 'next/og'
-import { Logo } from '@/components/logo'
+import { Logo } from '@/components/icons'
 
 export const alt = 'Dropdate: every game release and esports tournament in one calendar'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
 const WEEK = [['Mon', 6], ['Tue', 7], ['Wed', 8], ['Thu', 9], ['Fri', 10], ['Sat', 11], ['Sun', 12]] as const
-// The image renderer reads WOFF, not WOFF2, so the site's typeface comes from the static package
+// The image renderer reads WOFF, not WOFF2, so the typeface comes from the static package
 const font = (weight: number) => readFile(join(process.cwd(), `node_modules/@fontsource/mona-sans/files/mona-sans-latin-${weight}-normal.woff`))
 
-// The preview card shown when a link to the site is shared: a week on the wall calendar, one day circled
+/** The card shown when the site is shared: a week on the wall calendar, one day circled. */
 export default async function OpenGraphImage() {
   const [heavy, regular] = await Promise.all([font(800), font(400)]).catch(() => [])
   return new ImageResponse(

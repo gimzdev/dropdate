@@ -1,6 +1,6 @@
 'use client'
 
-// The last resort, for when the layout itself breaks: it replaces the whole document, so it brings its own page and styles.
+/** The last resort, when the layout itself breaks: it replaces the whole document, so it brings its own page and styles. */
 export default function GlobalFailed({ error, retry, reset }: { error: Error & { digest?: string }; retry?: () => void; reset: () => void }) {
   const button = { font: 'inherit', fontWeight: 600, height: 44, padding: '0 22px', borderRadius: 999, border: 0, cursor: 'pointer', background: '#ffd23f', color: '#000' } as const
   const link = { ...button, display: 'inline-flex', alignItems: 'center', background: 'transparent', color: '#f4f3ef', boxShadow: 'inset 0 0 0 1px rgba(244,243,238,.25)', textDecoration: 'none' } as const

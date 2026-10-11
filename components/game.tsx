@@ -1,17 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { type Ev, srcSet } from '@/lib/core'
+import { type Ev, type Game, srcSet } from '@/lib/core'
 import { Card, Icon, Section, useSwipe } from './ui'
 
-// The client side of a game page: the description, the screenshot viewer and the rail of nearby releases.
+// The client side of a game page: the description, the trailer, the screenshot viewer and the rail of nearby releases.
 
 type Block = { t: 'lead' | 'p' | 'h' | 'ul'; text?: string; items?: string[] }
 const BULLET = /^\s*(?:[•·▪●◦*]|-\s)\s*/
 
-/** Plain description text into a lead paragraph, headings, bullet lists and short paragraphs. */
 function blocks(raw: string): Block[] {
-  const lines = raw.replace(/\r/g, '').split(/\n\s*(?:Español|Español:|Spanish)\s*\n/i)[0].split('\n').map((l) => l.trim()).filter(Boolean) // RAWG often appends a translation
+  const lines = raw.replace(/\r/g, '').split('\n').map((l) => l.trim()).filter(Boolean)
   if (/^about( (this|the) game)?:?$/i.test(lines[0] ?? '')) lines.shift() // the section already says "About"
   const out: Block[] = []
   lines.forEach((line, n) => {
@@ -24,7 +23,7 @@ function blocks(raw: string): Block[] {
     const title = hasLead && n < lines.length - 1 && !/[.!?,;]$/.test(line) && line.split(' ').length <= 7 // a short unpunctuated line between paragraphs
     out.push(line.length <= 60 && (label || title) ? { t: 'h', text: line.replace(/:$/, '') } : { t: hasLead ? 'p' : 'lead', text: line })
   })
-  // long paragraphs are easier to read split at sentence boundaries
+  // long paragraphs read better split at sentence boundaries
   return out.flatMap((b): Block[] => {
     if ((b.t !== 'p' && b.t !== 'lead') || !b.text || b.text.length < 420) return [b]
     const parts: string[] = []
@@ -37,13 +36,11 @@ function blocks(raw: string): Block[] {
     return parts.map((text, k) => ({ t: b.t === 'lead' && k === 0 ? 'lead' : 'p', text }))
   })
 }
-
-// Sentence case for shouted headings: "KEY FEATURES" reads as "Key features"
-const sentence = (s: string) => (s === s.toUpperCase() ? s.charAt(0) + s.slice(1).toLowerCase() : s)
+const sentence = (s: string) => (s === s.toUpperCase() ? s.charAt(0) + s.slice(1).toLowerCase() : s) // "KEY FEATURES" reads as "Key features"
 
 export function About({ text, title }: { text: string; title: string }) {
   const all = useMemo(() => blocks(text), [text]), [open, setOpen] = useState(false)
-  // the preview is whole blocks: the lead and, if it is short, the next paragraph. Never a half-cut line.
+  // the preview is whole blocks: the lead and, if short, the next paragraph. Never a half-cut line.
   let cut = 0, chars = 0
   while (cut < all.length && cut < 3 && (chars < 380 || all[cut - 1]?.t === 'h')) { chars += all[cut].text?.length ?? (all[cut].items?.join('').length ?? 0); cut++ }
   if (all[cut - 1]?.t === 'h') cut--
@@ -62,36 +59,41 @@ export function About({ text, title }: { text: string; title: string }) {
   )
 }
 
-/** Screenshot viewer: a big image with arrows and thumbnails, and a full-screen lightbox (keyboard, swipe, counter). */
+/** A video file plays as it is; a YouTube trailer loads (from youtube-nocookie) only once play is pressed, so the page itself talks to nobody else. */
+export function Trailer({ trailer, title }: { trailer: NonNullable<Game['trailer']>; title: string }) {
+  const [play, setPlay] = useState(false), box = 'aspect-video w-full rounded-panel bg-black'
+  if (trailer.src) return <video controls preload="none" poster={trailer.preview} src={trailer.src} className={box} />
+  if (!trailer.youtube) return null
+  return play
+    ? <iframe src={`https://www.youtube-nocookie.com/embed/${trailer.youtube}?autoplay=1&rel=0`} title={`${title} trailer`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" className={`${box} border-0`} />
+    : (
+      <button type="button" onClick={() => setPlay(true)} aria-label={`Play the ${title} trailer`} className={`group relative block overflow-hidden ${box}`}>
+        <img src={`https://i.ytimg.com/vi/${trailer.youtube}/hqdefault.jpg`} alt="" loading="lazy" className="h-full w-full object-cover opacity-85 transition group-hover:opacity-100" />
+        <span className="absolute inset-0 grid place-items-center"><span className="grid h-16 w-16 place-items-center rounded-full bg-black/65 text-white backdrop-blur-md transition group-hover:scale-105"><Icon name="play" className="h-7 w-7" /></span></span>
+      </button>
+    )
+}
+
 export function Gallery({ shots, name }: { shots: string[]; name: string }) {
   const [i, setI] = useState(0), [open, setOpen] = useState(false), closeBtn = useRef<HTMLButtonElement>(null), n = shots.length
   const go = useCallback((d: number) => setI((x) => (x + d + n) % n), [n]), swipe = useSwipe(go, 50)
-
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-      else if (e.key === 'ArrowRight') go(1)
-      else if (e.key === 'ArrowLeft') go(-1)
-    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); else if (e.key === 'ArrowRight') go(1); else if (e.key === 'ArrowLeft') go(-1) }
     const prev = document.body.style.overflow, opener = document.activeElement as HTMLElement | null
     document.body.style.overflow = 'hidden'
     closeBtn.current?.focus({ preventScroll: true })
     addEventListener('keydown', onKey)
     return () => { removeEventListener('keydown', onKey); document.body.style.overflow = prev; opener?.focus({ preventScroll: true }) }
   }, [open, go])
-
-  useEffect(() => { // keep the active thumbnail centred inside its strip only: never scroll the page itself
+  useEffect(() => { // the active thumbnail is centred inside its strip only: the page itself never scrolls
     if (i === 0 && !open) return
     document.querySelectorAll<HTMLElement>('[data-strip]').forEach((box) => {
       const el = box.querySelector<HTMLElement>('[data-thumb-active="true"]')
       if (el) box.scrollTo({ left: el.offsetLeft - (box.clientWidth - el.clientWidth) / 2, behavior: 'smooth' })
     })
   }, [i, open])
-
-  useEffect(() => { // warm up the neighbours
-    if (n > 1) for (const k of [1, -1]) new Image().src = shots[(i + k + n) % n]
-  }, [i, n, shots])
+  useEffect(() => { if (n > 1) for (const k of [1, -1]) new Image().src = shots[(i + k + n) % n] }, [i, n, shots]) // warm up the neighbours
 
   const stop = (e: { stopPropagation(): void }) => e.stopPropagation()
   const arrow = 'absolute top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-black/60 text-white backdrop-blur-md transition hover:bg-black/85'
@@ -110,7 +112,6 @@ export function Gallery({ shots, name }: { shots: string[]; name: string }) {
     </div>
   )
   const alt = `${name}, screenshot ${i + 1} of ${n}`
-
   return (
     <>
       <div className="space-y-3">
@@ -141,12 +142,10 @@ export function Gallery({ shots, name }: { shots: string[]; name: string }) {
   )
 }
 
-/** A horizontal row of cards with arrows to page through it. */
 export function Rail({ title, lede, items, today }: { title: string; lede?: string; items: Ev[]; today: string }) {
   const row = useRef<HTMLDivElement>(null)
   if (!items.length) return null
-  const scroll = (d: number) => row.current?.scrollBy({ left: d * row.current.clientWidth * 0.85, behavior: 'smooth' })
-  const button = (d: number) => <button type="button" onClick={() => scroll(d)} aria-label={d < 0 ? 'Scroll back' : 'Scroll forward'} className="btn btn-line w-11 px-0"><Icon name={d < 0 ? 'left' : 'right'} /></button>
+  const button = (d: number) => <button type="button" onClick={() => row.current?.scrollBy({ left: d * row.current.clientWidth * 0.85, behavior: 'smooth' })} aria-label={d < 0 ? 'Scroll back' : 'Scroll forward'} className="btn btn-line w-11 px-0"><Icon name={d < 0 ? 'left' : 'right'} /></button>
   return (
     <Section title={title} lede={lede} action={<div className="hidden gap-2 sm:flex">{button(-1)}{button(1)}</div>}>
       <div ref={row} className="no-scrollbar bleed flex snap-x snap-mandatory gap-5 overflow-x-auto">
