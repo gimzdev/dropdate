@@ -57,7 +57,7 @@ function Tile({ e, list, today, done }: { e: Ev; list: TabName; today: string; d
       {played && !esport && (
         <button type="button" onClick={() => void finish()} aria-pressed={done} aria-label={`Completed: ${e.title}`} title={done ? 'Completed. Tap to undo' : 'Mark as completed'}
           className={`mt-3 inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-semibold transition active:scale-[.97] ${done ? 'bg-go/15 text-go ring-1 ring-go/40 ring-inset hover:bg-go/25' : 'text-muted ring-1 ring-line/15 ring-inset hover:text-fg hover:ring-line/30'}`}>
-          <span key={String(done)} className={`inline-flex ${done ? 'animate-pop' : ''}`}><Icon name={done ? 'check' : 'flag'} className="h-4 w-4" stroke={done ? 3 : 2} /></span>{done ? 'Completed' : 'Mark as completed'}
+          <span key={String(done)} className={`inline-flex ${done ? 'animate-pop' : ''}`}><Icon name={done ? 'check' : 'flag'} className="h-4 w-4" stroke={done ? 3 : 2} /></span>Completed
         </button>
       )}
       <div className="absolute top-2.5 right-2.5 flex gap-1.5">
@@ -249,7 +249,7 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
           <div className={`${empty} py-14`}>
             <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-raised text-muted">{tab === 'wishlist' ? <Heart on={false} className="h-6 w-6" /> : <Icon name="pad" className="h-6 w-6" />}</span>
             <p className="mt-5 text-lg font-semibold">{someDone ? (show === 'done' ? 'Nothing completed yet' : 'Everything here is completed') : EMPTY[tab][0]}</p>
-            <p className="mx-auto mt-2 max-w-sm text-muted">{someDone ? (show === 'done' ? 'Press “Mark as completed” on a game you have finished.' : 'Every game you have played is marked as completed.') : EMPTY[tab][1]}</p>
+            <p className="mx-auto mt-2 max-w-sm text-muted">{someDone ? (show === 'done' ? 'Press “Completed” on a game you have finished.' : 'Every game you have played is marked as completed.') : EMPTY[tab][1]}</p>
             {someDone ? <button type="button" onClick={() => setShow('all')} className="btn btn-mark mt-7">Show all games</button> : <Link href="/#explore" className="btn btn-mark mt-7">Browse the calendar</Link>}
           </div>
         )}
