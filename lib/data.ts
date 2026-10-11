@@ -77,10 +77,12 @@ const RAWG_STEAM = 1 // the id RAWG gives the Steam store
 const onSteam = (g: Rawg) => !!g.stores?.some((s) => s.store.id === RAWG_STEAM)
 
 /** `steamy` collects the games RAWG lists on Steam: where a missing score can be found. */
-async function rawg(dates: string, max: number, steamy: Set<string>, revalidate = HOUR): Promise<Ev[]> {
+interface Health { total: number; failed: number } // RAWG pages asked, and pages that got no answer (refused, throttled, down)
+async function rawg(dates: string, max: number, steamy: Set<string>, revalidate = HOUR, health?: Health): Promise<Ev[]> {
   const key = env.RAWG_API_KEY
   if (!key) return []
   const all = await pages(max, (p) => get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&dates=${dates}&ordering=-added&page_size=40&page=${p}`, revalidate))
+  if (health) { health.total += max; health.failed += all.filter((r) => r === undefined).length }
   const games = all.flatMap((r) => r?.results ?? [])
   for (const g of games) if (onSteam(g)) steamy.add(`rawg-${g.id}`)
   return games.flatMap((g) => rawgEv(g) ?? [])
@@ -91,11 +93,11 @@ async function rawg(dates: string, max: number, steamy: Set<string>, revalidate 
  * months' games be crowded out by far-off ones: here each period keeps its own most followed. The far windows change slowly and
  * are asked every six hours, which keeps the total below what one list asked hourly used to cost.
  */
-async function upcomingGames(today: string, steamy: Set<string>): Promise<Ev[]> {
+async function upcomingGames(today: string, steamy: Set<string>, health: Health): Promise<Ev[]> {
   const lists = await Promise.all([
-    rawg(`${today},${shift(today, 120)}`, 4, steamy),
-    rawg(`${shift(today, 121)},${shift(today, 300)}`, 3, steamy, 6 * HOUR),
-    rawg(`${shift(today, 301)},${shift(today, 730)}`, 3, steamy, 6 * HOUR),
+    rawg(`${today},${shift(today, 120)}`, 4, steamy, HOUR, health),
+    rawg(`${shift(today, 121)},${shift(today, 300)}`, 3, steamy, 6 * HOUR, health),
+    rawg(`${shift(today, 301)},${shift(today, 730)}`, 3, steamy, 6 * HOUR, health),
   ])
   return lists.flat()
 }
@@ -172,10 +174,10 @@ function relevance(title: string, variants: string[]) {
 export async function searchGames(q: string): Promise<Found[]> {
   const term = q.replace(/\s+/g, ' ').trim().slice(0, 80)
   if (term.length < 2) return []
-  const key = env.RAWG_API_KEY, variants = expandQuery(term).slice(0, 3), enc = encodeURIComponent
+  const key = env.RAWG_API_KEY, variants = expandQuery(term).slice(0, 2), enc = encodeURIComponent
   // "gta" is asked as typed and as "grand theft auto": the series by popularity, so its main games come first
   const [rawgs, shops] = await Promise.all([
-    Promise.all(variants.map((v, i) => (key ? get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&search=${enc(v)}&page_size=${i ? 30 : 12}${i ? '&ordering=-added' : ''}`) : undefined))),
+    Promise.all(variants.map((v, i) => (key ? get<{ results?: Rawg[] }>(`${RAWG}/games?key=${key}&search=${enc(v)}&page_size=${i ? 30 : 12}${i ? '&ordering=-added' : ''}`, 6 * HOUR) : undefined))),
     Promise.all(variants.slice(0, 2).map((v) => (steamOn() ? get<{ items?: { id: number; name: string; type?: string; metascore?: string }[] }>(`${STEAM}/api/storesearch/?term=${enc(v)}&l=english&cc=us`) : undefined))),
   ])
   const found = new Map<string, { f: Found; rel: number; score: number }>(), seen = new Set<string>()
@@ -355,11 +357,14 @@ const safe = <T,>(p: Promise<T[]>) => p.catch(() => [] as T[]) // one failing so
 /** Everything, merged and sorted by date, without empty fields (they would ship to every browser). */
 async function load() {
   const today = iso(new Date())
-  const steamy = new Set<string>()
+  const steamy = new Set<string>(), health: Health = { total: 0, failed: 0 }
   const [upcoming, recent, wished, soon, sports] = await Promise.all([
-    safe(upcomingGames(today, steamy)), safe(rawg(`${shift(today, -60)},${shift(today, -1)}`, 4, steamy)),
+    safe(upcomingGames(today, steamy, health)), safe(rawg(`${shift(today, -60)},${shift(today, -1)}`, 4, steamy, HOUR, health)),
     safe(steamList('popularwishlist', 1500)), safe(steamList('popularcomingsoon', 600)), safe(esports()),
   ])
+  // RAWG is where most of the games come from. If most of its pages got no answer (quota used up, outage), the rest would pass for a complete
+  // calendar with a month or two nearly empty and be kept for an hour: better to fail, so the last good calendar stays up and the next visit asks again
+  if (env.RAWG_API_KEY && health.total && health.failed * 2 > health.total) throw new Error(`RAWG did not answer (${health.failed} of ${health.total} pages)`)
   const releases = [...new Map([...upcoming, ...recent].map((e) => [e.id, e])).values()]
   const [pc, scores] = await Promise.all([
     safe(steam([...wished, ...soon], new Set(releases.map((e) => same(e.title))), today)),
@@ -376,16 +381,22 @@ const kept = unstable_cache(load, ['events', env.PANDASCORE_TIERS || '', env.STE
 let run: { at: number; data: ReturnType<typeof load> } | null = null // one load per server instance for 5 minutes
 let last: Awaited<ReturnType<typeof load>> | null = null // the last good data, for when every source fails
 
+let downUntil = 0 // after a failed load, no new attempt for a minute: a source that is out of quota is not helped by a request per visitor
 export async function getEvents(): Promise<Payload> {
   const today = iso(new Date())
+  const fallback = (): Payload => last
+    ? { ...last, today, stale: true }
+    : { events: [], today, updated: new Date().toISOString(), stale: true, error: env.RAWG_API_KEY ? 'RAWG or another data source did not answer: its quota may be used up. See the logs.' : 'RAWG_API_KEY is not set.' }
+  if (Date.now() < downUntil) return fallback()
   if (!run || Date.now() - run.at > 3e5) run = { at: Date.now(), data: kept() }
   try {
     last = await run.data
     return { ...last, today, stale: false }
-  } catch {
+  } catch (e) {
+    console.error('[dropdate] the calendar could not be built:', e instanceof Error ? e.message : e)
     run = null
-    if (last) return { ...last, today, stale: true }
-    return { events: [], today, updated: new Date().toISOString(), stale: true, error: env.RAWG_API_KEY ? 'The data sources did not answer.' : 'RAWG_API_KEY is not set.' }
+    downUntil = Date.now() + 60_000
+    return fallback()
   }
 }
 

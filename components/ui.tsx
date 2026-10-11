@@ -67,7 +67,7 @@ export function useLookup(q: string) {
         if (!res.ok) { drop(res); throw new Error(String(res.status)) }
         setFound(((await res.json()) as { data: Found[] }).data)
       } catch { if (!ctl.signal.aborted) { setFound(null); setFailed(true) } }
-    }, 250)
+    }, 350)
     return () => { clearTimeout(t); ctl.abort() }
   }, [q])
   return { found, failed }
