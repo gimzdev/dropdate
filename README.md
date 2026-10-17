@@ -17,6 +17,8 @@ Game releases and esports tournaments in one calendar, with a free API.
 </tr>
 </table>
 
+<hr>
+
 Dropdate puts every game release and esports tournament in one calendar. Search it in plain English, keep
 a wishlist, and add any view to Google, Apple or Outlook calendars so it follows a game when the date
 slips. It also has a free API, no key needed.
