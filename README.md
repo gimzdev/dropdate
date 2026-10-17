@@ -6,8 +6,6 @@ Game releases and esports tournaments in one calendar, with a free API.
 
 [dropdate.net](https://dropdate.net) · [API](https://dropdate.net/docs) · Next.js · TypeScript · PostgreSQL
 
-</div>
-
 <table>
 <tr>
 <td align="center" width="50%"><img src="docs/screenshots/dropdate-home.png" alt="Home"><br><sub>Home</sub></td>
@@ -19,24 +17,21 @@ Game releases and esports tournaments in one calendar, with a free API.
 </tr>
 </table>
 
+Dropdate puts every game release and esports tournament in one calendar. Search it in plain English, keep
+a wishlist, and add any view to Google, Apple or Outlook calendars so it follows a game when the date
+slips. It also has a free API, no key needed.
+
 | | |
-|---|---|
-| **Feeds** | This week, most anticipated, just released: games and tournaments by day |
-| **Games** | Dates, artwork and critic scores; plain-English search, platform and genre filters |
+|:---|:---|
+| **Feeds** | This week, most anticipated and just released, grouped by day |
+| **Games** | Dates, artwork and critic scores; filters for platform and genre |
 | **Esports** | Live and upcoming tournaments with dates and prize pools |
-| **Accounts** | Wishlist and games played, each markable as completed |
-| **Calendar sync** | Any view in Google, Apple or Outlook calendars, following dates as they move |
-| **Free API** | JSON or iCalendar, no key ([docs](https://dropdate.net/docs)) |
+| **Accounts** | A wishlist and the games you played, each markable as completed |
+| **Free API** | JSON or iCalendar, e.g. `/api/events?q=ps5 releases next month` ([docs](https://dropdate.net/docs)) |
 
-```
-GET /api/events?q=ps5%20releases%20next%20month&limit=10
-GET /api/calendar.ics?type=release&q=xbox
-```
-
-| Data | From |
-|---|---|
-| Games | IGDB, Steam |
-| Tournaments | PandaScore |
-| Accounts | PostgreSQL |
+Game data comes from IGDB and Steam, tournaments from PandaScore, and accounts live in PostgreSQL. A source
+without a key is simply skipped.
 
 <sub>Names and images belong to their owners.</sub>
+
+</div>
