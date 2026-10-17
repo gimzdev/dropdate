@@ -19,29 +19,24 @@ Game releases and esports tournaments in one calendar, with a free API.
 </tr>
 </table>
 
-## What's in it
+| | |
+|---|---|
+| **Feeds** | This week, most anticipated, just released: games and tournaments by day |
+| **Games** | Dates, artwork and critic scores; plain-English search, platform and genre filters |
+| **Esports** | Live and upcoming tournaments with dates and prize pools |
+| **Accounts** | Wishlist and games played, each markable as completed |
+| **Calendar sync** | Any view in Google, Apple or Outlook calendars, following dates as they move |
+| **Free API** | JSON or iCalendar, no key ([docs](https://dropdate.net/docs)) |
 
-- **This week**, **most anticipated** and **just released**: releases and tournaments, grouped by day
-- **Every game**: release dates, artwork and critic scores, searched in plain English and filtered by platform and genre
-- **Esports**: live and upcoming tournaments, with dates and prize pools
-- **Accounts**: a wishlist and the games you played, each markable as completed
-- **Calendar sync**: any view in Google Calendar, Apple Calendar or Outlook, following dates as they move
-- **A free API**: JSON or an iCalendar feed, no key needed ([docs](https://dropdate.net/docs))
-
-```bash
+```
 GET /api/events?q=ps5%20releases%20next%20month&limit=10
 GET /api/calendar.ics?type=release&q=xbox
 ```
 
-## Run it
+| Data | From |
+|---|---|
+| Games | IGDB, Steam |
+| Tournaments | PandaScore |
+| Accounts | PostgreSQL |
 
-```bash
-npm install
-npm run dev
-```
-
-Needs Node.js 20.9 or newer. Add the keys you have to `.env.local`: `TWITCH_CLIENT_ID` and
-`TWITCH_CLIENT_SECRET` (IGDB), `PANDASCORE_TOKEN` (esports), `DATABASE_URL` (accounts). A source
-without a key is skipped; Steam needs none.
-
-<sub>Game data from IGDB and Steam, esports from PandaScore. Names and images belong to their owners.</sub>
+<sub>Names and images belong to their owners.</sub>
