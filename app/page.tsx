@@ -21,7 +21,8 @@ export default async function Home() {
   const art = (e: Ev) => { const image = big.get(e.id); return image ? { ...e, image } : e }
   const releases = events.filter((e) => e.kind === 'release'), ahead = releases.filter((e) => e.start >= today), soon = ahead.filter((e) => gap(today, e.start) <= 120)
   const hero = [...(soon.length >= 3 ? soon : ahead)].filter(hasArt).sort(hype).slice(0, 5), shown = new Set(hero.map((e) => e.id))
-  const week = events.filter((e) => e.start >= shift(today, -1) && e.start <= shift(today, 7)) // the browser works out its own today: a day either side
+  const near = (d?: string) => !!d && d >= shift(today, -1) && d <= shift(today, 7) // the browser works out its own today: a day either side
+  const week = events.filter((e) => near(e.start) || (e.kind === 'tournament' && near(e.end))) // what starts, and tournaments whose final day falls in the week
   const later = ahead.filter((e) => e.start > today && !shown.has(e.id)), year = later.filter((e) => gap(today, e.start) <= 365)
   const ranked = [...(year.length >= 6 ? year : later)].sort(hype).slice(0, 11)
   const [lead] = ranked.splice(Math.max(0, ranked.findIndex(hasArt)), 1) // the big tile is the first with artwork

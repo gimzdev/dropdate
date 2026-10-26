@@ -100,29 +100,34 @@ export function Hero({ slides, today: serverToday }: { slides: Ev[]; today: stri
 
 export function WeekStrip({ items, today: serverToday }: { items: Ev[]; today: string }) {
   const today = useToday(serverToday), explore = useExplore()
-  const days = Array.from({ length: 7 }, (_, k) => shift(today, k)).map((d) => ({ d, list: items.filter((e) => e.start === d).sort((a, b) => b.pop - a.pop) }))
+  const byPop = (a: Ev, b: Ev) => b.pop - a.pop
+  const days = Array.from({ length: 7 }, (_, k) => shift(today, k)).map((d) => ({
+    d, list: items.filter((e) => e.start === d).sort(byPop), finals: items.filter((e) => e.kind === 'tournament' && e.end === d && e.start !== d).sort(byPop),
+  }))
   const total = days.reduce((sum, x) => sum + x.list.length, 0)
   return (
     <Section id="week" title="This week" className="pt-10 pb-14 md:pt-14 md:pb-20"
       lede={total ? `${total} ${total === 1 ? 'release or tournament starts' : 'releases and tournaments start'} in the next seven days.` : 'Nothing starts in the next seven days. The full calendar has what comes after.'}
       action={<button type="button" onClick={() => explore({ day: today })} className="btn btn-line">Open the calendar</button>}>
       <ol className="no-scrollbar bleed -my-3 flex snap-x snap-mandatory gap-8 overflow-x-auto py-3 xl:mx-0 xl:grid xl:grid-cols-7 xl:overflow-visible xl:px-0">
-        {days.map(({ d, list }) => <Day key={d} d={d} list={list} today={today} onOpen={() => explore({ day: d })} />)}
+        {days.map(({ d, list, finals }) => <Day key={d} d={d} list={list} finals={finals} today={today} onOpen={() => explore({ day: d })} />)}
       </ol>
     </Section>
   )
 }
 
-function Day({ d, list, today, onOpen }: { d: string; list: Ev[]; today: string; onOpen: () => void }) {
+function Day({ d, list, finals, today, onOpen }: { d: string; list: Ev[]; finals: Ev[]; today: string; onOpen: () => void }) {
   const isToday = d === today, label = isToday ? 'Today' : gap(today, d) === 1 ? 'Tomorrow' : weekday(d)
-  const [lead, ...rest] = list, more = rest.slice(0, 3), extra = rest.length - more.length
+  // A day where nothing starts shows the tournaments that end on it (their final day) instead of an empty frame
+  const ending = !list.length && finals.length > 0, shown = ending ? finals : list
+  const [lead, ...rest] = shown, more = rest.slice(0, 3), extra = rest.length - more.length
   return ( // ruled like a wall calendar: the line sits in the gap, so every day gets the same width
     <li className="relative flex w-[220px] shrink-0 snap-start flex-col before:absolute before:inset-y-0 before:-left-4 before:w-px before:bg-line/10 first:before:hidden xl:w-auto">
-      <button type="button" onClick={onOpen} aria-label={`${label}, ${longDate(d)}: ${plural(list.length, 'event')}. Open it in the calendar`} className="mb-4 flex items-end gap-3 rounded-lg text-left">
+      <button type="button" onClick={onOpen} aria-label={`${label}, ${longDate(d)}: ${ending ? plural(finals.length, 'tournament final') : plural(list.length, 'event')}. Open it in the calendar`} className="mb-4 flex items-end gap-3 rounded-lg text-left">
         <span className="relative grid h-[58px] min-w-[50px] place-items-center">{isToday && <Circled className="-inset-x-3 -inset-y-2" />}<span className="display text-[52px] leading-none">{+d.slice(8)}</span></span>
         <span className="pb-1 leading-tight">
           <span className={`block text-[15px] font-semibold ${isToday ? 'text-mark' : ''}`}>{label}</span>
-          <span className="block text-[13px] text-muted">{list.length ? plural(list.length, 'drop') : monthShort(d)}</span>
+          <span className="block text-[13px] text-muted">{list.length ? plural(list.length, 'drop') : ending ? plural(finals.length, 'final') : monthShort(d)}</span>
         </span>
       </button>
       {lead ? (
@@ -131,7 +136,7 @@ function Day({ d, list, today, onOpen }: { d: string; list: Ev[]; today: string;
             : lead.thumb ? <Img src={lead.thumb} className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" /> : null}
           <span className="absolute inset-0 bg-linear-to-t from-black/90 via-black/20 to-transparent" />
           <span className="absolute inset-x-3 bottom-2.5">
-            {lead.kind === 'tournament' && <span className="block text-[12px] font-semibold text-arena">Esports</span>}
+            {lead.kind === 'tournament' && <span className="block text-[12px] font-semibold text-arena">{ending ? 'Esports · Final day' : 'Esports'}</span>}
             <span className="line-clamp-2 text-[14px] leading-tight font-semibold text-white">{lead.title}</span>
           </span>
         </Open>
