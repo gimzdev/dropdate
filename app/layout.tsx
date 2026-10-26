@@ -2,6 +2,7 @@ import '@fontsource-variable/mona-sans/standard.css'
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
+import { Analytics } from '@vercel/analytics/next'
 import { Notice } from '@/components/ui'
 import { ACCOUNTS, SITE } from '@/lib/core'
 
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <a href="#main" className="skip">Skip to content</a>
         {children}
         {ACCOUNTS && <Notice />}
+        <Analytics />
       </body>
     </html>
   )
