@@ -34,7 +34,8 @@ export function Footer() {
       </div>
       <div className="wrap flex flex-col justify-between gap-3 border-t border-line/10 py-6 text-[13px] text-dim sm:flex-row">
         <p>Game data and artwork from <A to="https://www.igdb.com" className={credit}>IGDB</A> and <A to="https://store.steampowered.com" className={credit}>Steam</A>, esports from <A to="https://pandascore.co" className={credit}>PandaScore</A>. Names, scores and images belong to their owners.</p>
-        <p className="shrink-0">© {new Date().getFullYear()} Dropdate</p>
+        {/* A plain link rather than A: without noreferrer, gimzdev.com's analytics can show Dropdate as where the visit came from */}
+        <p className="shrink-0">© {new Date().getFullYear()} Dropdate · Made by <a href="https://gimzdev.com" target="_blank" rel="noopener" className={credit}>Gimz</a></p>
       </div>
     </footer>
   )
