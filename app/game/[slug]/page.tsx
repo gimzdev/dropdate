@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, ResolvingMetadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
@@ -13,11 +13,13 @@ export const generateStaticParams = async () => [] // built on the first visit, 
 
 type Props = { params: Promise<{ slug: string }> }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: Props, parent: ResolvingMetadata): Promise<Metadata> {
   const g = await getGame((await params).slug).catch(() => null)
   if (!g) return { title: 'Game' }
   const description = `${g.name}: release date, ${g.trailer ? 'trailer, ' : ''}screenshots and platforms.${g.released ? ` Releases ${longDate(g.released)}.` : ''}`.slice(0, 200)
-  return { title: `${g.name}: release date${g.trailer ? ' and trailer' : ''}`, description, alternates: { canonical: `/game/${g.slug}` }, openGraph: { title: g.name, description, images: g.image ? [g.image] : [] }, twitter: { card: 'summary_large_image' } }
+  // the game's art, or the site's link picture (app/opengraph-image.png) for a game without any
+  const images = g.image ? [g.image] : ((await parent).openGraph?.images ?? [])
+  return { title: `${g.name}: release date${g.trailer ? ' and trailer' : ''}`, description, alternates: { canonical: `/game/${g.slug}` }, openGraph: { title: g.name, description, images }, twitter: { card: 'summary_large_image' } }
 }
 
 const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
