@@ -6,6 +6,8 @@ Game releases and esports tournaments in one calendar, with a free API.
 
 [dropdate.net](https://dropdate.net) · [API](https://dropdate.net/docs) · Next.js · TypeScript · PostgreSQL
 
+<img src="docs/screenshots/dropdate-preview.gif" alt="Dropdate: a featured game, this week's releases, then a search for Red Dead in Browse">
+
 <table>
 <tr>
 <td align="center" width="50%"><img src="docs/screenshots/dropdate-home.png" alt="Home"><br><sub>Home</sub></td>
@@ -16,6 +18,8 @@ Game releases and esports tournaments in one calendar, with a free API.
 <td align="center" width="50%"><img src="docs/screenshots/dropdate-esports.png" alt="Esports"><br><sub>Esports</sub></td>
 </tr>
 </table>
+
+<hr>
 
 Dropdate puts every game release and esports tournament in one calendar. Search it in plain English, keep
 a wishlist, and add any view to Google, Apple or Outlook calendars so it follows a game when the date
