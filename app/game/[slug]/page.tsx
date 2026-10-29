@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: Props, parent: ResolvingMetad
   const g = await getGame((await params).slug).catch(() => null)
   if (!g) return { title: 'Game' }
   const description = `${g.name}: release date, ${g.trailer ? 'trailer, ' : ''}screenshots and platforms.${g.released ? ` Releases ${longDate(g.released)}.` : ''}`.slice(0, 200)
-  // the game's art, or the site's link picture (app/opengraph-image.png) for a game without any
+  // the game's art, or the site's link picture (app/opengraph-image.jpg) for a game without any
   const images = g.image ? [g.image] : ((await parent).openGraph?.images ?? [])
   return { title: `${g.name}: release date${g.trailer ? ' and trailer' : ''}`, description, alternates: { canonical: `/game/${g.slug}` }, openGraph: { title: g.name, description, images }, twitter: { card: 'summary_large_image' } }
 }
