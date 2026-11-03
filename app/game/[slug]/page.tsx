@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { About, Gallery, Rail, Trailer } from '@/components/game'
 import { Footer } from '@/components/site'
+import { SupportNote } from '@/components/support'
 import { BigDate, Countdown, Header, Icon, Progress, SaveButton } from '@/components/ui'
 import { ACCOUNTS, SITE, googleUrl, longDate, monthLabel, scoreTone, srcSet, status } from '@/lib/core'
 import { getEvents, getGame, getSimilar } from '@/lib/data'
@@ -116,6 +117,7 @@ export default async function GamePage({ params }: Props) {
             {g.tags.length > 0 && (
               <Panel title="Tags"><ul className="flex flex-wrap gap-1.5">{g.tags.map((t) => <li key={t} className="rounded-full px-3 py-1 text-[13px] text-muted ring-1 ring-line/12 ring-inset">{t}</li>)}</ul></Panel>
             )}
+            <SupportNote small>Dropdate is free and has no ads. Found what you needed?</SupportNote>
           </aside>
         </div>
         <Rail title="Similar games" lede="Games players of this one also like." items={similar} today={today} />

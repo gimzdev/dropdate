@@ -1,10 +1,10 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { Icon, Logo } from './icons'
+import { PATREON } from '@/lib/core'
+import { Heart, Icon, Logo } from './icons'
 import { Header, HomeLink } from './ui'
 
 export const REPO = process.env.NEXT_PUBLIC_REPO_URL || 'https://github.com/gimzdev/dropdate'
-const PATREON = 'https://www.patreon.com/gimzdev'
 /** A link: a new tab for other sites, a plain link for the feeds, client-side for pages. */
 export const A = ({ to, children, className }: { to: string; children: ReactNode; className?: string }) =>
   to.startsWith('/') && !to.startsWith('/api/') ? <Link href={to} className={className}>{children}</Link>
@@ -12,7 +12,7 @@ export const A = ({ to, children, className }: { to: string; children: ReactNode
 
 const COLUMNS: [string, string[][]][] = [
   ['Calendar', [['This week', '/#week'], ['Most anticipated', '/#upcoming'], ['Esports', '/#esports'], ['Search', '/#explore'], ['Browse every game', '/browse']]],
-  ['Project', [['Source on GitHub', REPO], ['Support on Patreon', PATREON], ['Terms and privacy', '/legal'], ['CC0 license', 'https://creativecommons.org/publicdomain/zero/1.0/']]],
+  ['Project', [['Source on GitHub', REPO], ['Terms and privacy', '/legal'], ['CC0 license', 'https://creativecommons.org/publicdomain/zero/1.0/']]],
 ]
 const credit = 'underline decoration-line/30 underline-offset-2 transition hover:text-fg'
 
@@ -23,6 +23,7 @@ export function Footer() {
         <div>
           <HomeLink className="flex w-fit items-center gap-2"><Logo size={28} /><span className="display text-[22px]">Dropdate</span></HomeLink>
           <p className="mt-4 max-w-xs text-[15px] text-muted">Game releases and esports tournaments in one calendar, refreshed every hour.</p>
+          <a href={PATREON} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-line mt-6"><span className="text-mark"><Heart on className="h-3.5 w-3.5" /></span>Support on Patreon</a>
         </div>
         {COLUMNS.map(([title, links]) => (
           <nav key={title} aria-label={title}>

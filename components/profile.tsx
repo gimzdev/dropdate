@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { deleteAccount, drop, notify, seed, setList, signOut, useAccount } from '@/lib/account'
 import { type Ev, type Found, type LibItem, TABS, type TabName, monthYear, status } from '@/lib/core'
+import { SupportNote } from './support'
 import { DateBlock, FeedPanel, Heart, Icon, Img, Open, Score, TONE, Thumb, useLookup, useOutside, useToday } from './ui'
 
 // The profile: the wishlist and the games you played as cards (a played game can be marked completed); sign out, download, delete.
@@ -261,6 +262,8 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
           <p className="mt-1 max-w-xl text-[13px] text-dim">The link holds the list of games on your wishlist (up to 300), so share it only with calendars you trust.</p>
         </FeedPanel>
       )}
+
+      <SupportNote className="mt-14">Dropdate is free and has no ads. If it keeps your wishlist on track, help keep it that way.</SupportNote>
 
       <section id="account" aria-labelledby="account-title" className="mt-20 border-t border-line/10 pt-8">
         <h2 id="account-title" className="sr-only">Your account</h2>

@@ -1,6 +1,8 @@
 // Shared by the server and the browser: types, dates, calendar export, accounts and browse helpers. The search is in search.ts.
 
 export const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'https://dropdate.net').replace(/\/$/, '')
+/** Where people can support Dropdate: the header, the footer and the notes in components/support.tsx link here */
+export const PATREON = 'https://www.patreon.com/gimzdev'
 export const PLATFORMS = ['PC', 'PlayStation', 'Xbox', 'Nintendo', 'Mobile'] as const
 export type Platform = (typeof PLATFORMS)[number]
 export type Kind = 'release' | 'tournament'

@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import { Explorer, Fresh, Hero, Schedule, Upcoming, WeekStrip } from '@/components/home'
 import { Footer } from '@/components/site'
-import { Header } from '@/components/ui'
+import { SupportNote } from '@/components/support'
+import { Circled, Header } from '@/components/ui'
 import { type Ev, gap, shift } from '@/lib/core'
 import { getEvents } from '@/lib/data'
 
@@ -37,6 +38,7 @@ export default async function Home() {
         <WeekStrip items={week} today={today} />
         {lead && ranked.length >= 2 ? <Upcoming items={[art(lead), ...ranked]} today={today} /> : <span id="upcoming" />}
         <Fresh items={fresh} today={today} />
+        <SupportNote className="wrap pb-14 md:pb-20">Dropdate is <span className="relative mx-1.5 inline-block font-semibold text-fg">free<Circled className="-inset-x-2 -inset-y-1.5" /></span> for everyone, with no ads, no tracking and no paywall. One developer builds it, and supporters keep it running.</SupportNote>
         {cups.length ? <Schedule items={cups} today={today} /> : <span id="esports" />}
         <Explorer data={{ ...data, events }} />
       </main>
