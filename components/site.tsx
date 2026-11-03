@@ -4,6 +4,7 @@ import { Icon, Logo } from './icons'
 import { Header, HomeLink } from './ui'
 
 export const REPO = process.env.NEXT_PUBLIC_REPO_URL || 'https://github.com/gimzdev/dropdate'
+const PATREON = 'https://www.patreon.com/gimzdev'
 /** A link: a new tab for other sites, a plain link for the feeds, client-side for pages. */
 export const A = ({ to, children, className }: { to: string; children: ReactNode; className?: string }) =>
   to.startsWith('/') && !to.startsWith('/api/') ? <Link href={to} className={className}>{children}</Link>
@@ -11,7 +12,7 @@ export const A = ({ to, children, className }: { to: string; children: ReactNode
 
 const COLUMNS: [string, string[][]][] = [
   ['Calendar', [['This week', '/#week'], ['Most anticipated', '/#upcoming'], ['Esports', '/#esports'], ['Search', '/#explore'], ['Browse every game', '/browse']]],
-  ['Project', [['Source on GitHub', REPO], ['Terms and privacy', '/legal'], ['CC0 license', 'https://creativecommons.org/publicdomain/zero/1.0/']]],
+  ['Project', [['Source on GitHub', REPO], ['Support on Patreon', PATREON], ['Terms and privacy', '/legal'], ['CC0 license', 'https://creativecommons.org/publicdomain/zero/1.0/']]],
 ]
 const credit = 'underline decoration-line/30 underline-offset-2 transition hover:text-fg'
 
