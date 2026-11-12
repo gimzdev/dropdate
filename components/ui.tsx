@@ -6,6 +6,7 @@ import { type AnchorHTMLAttributes, type ReactNode, type RefObject, type Synthet
 import { dismiss, drop, notify, ready, setList, signOut, signedInNow, useAccount, useNotice, useSaved } from '@/lib/account'
 import { ACCOUNTS, type Ev, type Found, PLATFORMS, type Platform, ago, href, iso, longDate, monthLabel, monthShort, scoreTone, status, toDate, webcal, weekday } from '@/lib/core'
 import { Heart, Icon, Logo } from './icons'
+import { track } from '@vercel/analytics'
 
 export { Heart, Icon, useSaved }
 
@@ -212,6 +213,7 @@ export function FeedPanel({ feed, title, as: H = 'h3', className, children }: { 
   const [copied, setCopied] = useState(''), done = !!copied && copied === feed
   const copy = async () => {
     try { await navigator.clipboard.writeText(feed) } catch { return void prompt('Calendar feed link', feed) }
+    track('calendar_add', { app: 'link' })
     setCopied(feed)
     setTimeout(() => setCopied(''), 2200)
   }
@@ -222,8 +224,8 @@ export function FeedPanel({ feed, title, as: H = 'h3', className, children }: { 
         <div><H className="text-lg font-semibold">{title}</H>{children}</div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <a href={feed ? `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal(feed))}` : undefined} target="_blank" rel="noopener noreferrer" className="btn btn-mark">Google Calendar</a>
-        <a href={feed ? webcal(feed) : undefined} className="btn btn-line">Apple or Outlook</a>
+        <a href={feed ? `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal(feed))}` : undefined} target="_blank" rel="noopener noreferrer" onClick={() => track('calendar_add', { app: 'google' })} className="btn btn-mark">Google Calendar</a>
+        <a href={feed ? webcal(feed) : undefined} onClick={() => track('calendar_add', { app: 'apple-outlook' })} className="btn btn-line">Apple or Outlook</a>
         <button type="button" onClick={copy} disabled={!feed} className="btn btn-line"><Icon name={done ? 'check' : 'copy'} />{done ? 'Link copied' : 'Copy link'}</button>
       </div>
     </div>

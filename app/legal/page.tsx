@@ -104,6 +104,13 @@ export default function Legal() {
         </DocSection>
       )}
 
+      {process.env.AFFILIATES && (
+        <DocSection id="stores" title="Store links">
+          <div className="prose-dd">
+            <p>Some “Where to buy” links on game pages carry the store’s affiliate code, marked as sponsored: the store may pay Dropdate a share of a sale, at no cost to you. Dropdate sends the store nothing about you; once you are on the store, its own privacy policy applies.</p>
+          </div>
+        </DocSection>
+      )}
       <DocSection id="source" title="Open source">
         <p className="prose-dd">Dropdate is open source under the CC0 license: <A to={REPO}>{REPO.replace('https://', '')}</A></p>
       </DocSection>

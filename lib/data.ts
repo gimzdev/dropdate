@@ -3,7 +3,7 @@
 import { unstable_cache } from 'next/cache'
 import { cache } from 'react'
 import { type BrowseQuery, type Ev, type Found, type Game, type Payload, type Platform, BROWSE_PAGE, BROWSE_PAGES, expandQuery, iso, lite, shift } from './core'
-import { allow } from './db'
+import { allow, hasDb, q } from './db'
 
 const env = process.env
 const STEAM = env.STEAM_BASE || 'https://store.steampowered.com', PANDA = env.PANDA_BASE || 'https://api.pandascore.co'
@@ -490,10 +490,34 @@ const missing = new Map<string, number>() // slugs a source said do not exist, f
 const SLUG = /^[a-z0-9][a-z0-9-]{0,119}$/i
 
 /** A game page (an IGDB slug, igdb-<id>-…, steam-<id>-…), once per request; impossible or just-missing slugs never reach a source. */
+// The last good copy of each game page: when IGDB or Steam does not answer, the page shows it instead of failing. Kept in
+// Postgres when there is one (dd_game_copy, db/006), and in memory for this instance either way.
+const copies = new Map<string, Game>()
+async function keepCopy(slug: string, game: Game) {
+  copies.delete(slug); copies.set(slug, game)
+  if (copies.size > 300) copies.delete(copies.keys().next().value as string)
+  if (hasDb()) await q('insert into dd_game_copy (slug, data, kept_at) values ($1, $2, now()) on conflict (slug) do update set data = excluded.data, kept_at = now()', [slug, JSON.stringify(game)]).catch(() => undefined)
+}
+async function lastCopy(slug: string): Promise<Game | null> {
+  const mine = copies.get(slug)
+  if (mine || !hasDb()) return mine ?? null
+  const r = await q<{ data: Game }>('select data from dd_game_copy where slug = $1', [slug]).catch(() => null)
+  return r?.[0]?.data ?? null
+}
+
 export const getGame = cache(async (slug: string): Promise<Game | null> => {
   if (!SLUG.test(slug) || (missing.get(slug) ?? 0) > Date.now()) return null
   const [, src, id] = slug.match(/^(steam|igdb)-(\d+)(?:-|$)/) ?? []
-  const game = await (src === 'steam' ? steamGame(id) : igdbGame(src ? `id = ${id}` : `slug = "${slug.toLowerCase()}"`))
+  let game: Game | null
+  try {
+    game = await (src === 'steam' ? steamGame(id) : igdbGame(src ? `id = ${id}` : `slug = "${slug.toLowerCase()}"`))
+  } catch (error) {
+    // The source is down: the last good copy, or the error page says the game is back soon (app/game/[slug]/error.tsx)
+    const copy = await lastCopy(slug)
+    if (copy) return copy
+    throw error
+  }
+  if (game) void keepCopy(slug, game)
   if (!game) {
     if (missing.size > 500) missing.clear()
     missing.set(slug, Date.now() + 600_000)

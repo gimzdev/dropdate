@@ -1,1 +1,1 @@
-Dropdate: every game drop, one calendar. Game releases and esports tournaments, refreshed every hour, with a free API
+Dropdate: every game drop, one calendar. Game releases and esports tournaments, refreshed every hour, with calendar feeds for Google, Apple and Outlook

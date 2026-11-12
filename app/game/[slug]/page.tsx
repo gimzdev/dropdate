@@ -33,6 +33,16 @@ const COLS = ['', 'md:grid-cols-1', 'md:grid-cols-2', 'md:grid-cols-3', 'md:grid
 const out = { target: '_blank', rel: 'noopener noreferrer' }
 const filled = (rows: string[][]) => rows.filter(([, v]) => v)
 
+// Where to buy: AFFILIATES (the settings) adds a store's parameter to its links, which are then marked sponsored
+const AFFILIATES = new Map((process.env.AFFILIATES || '').split(',').flatMap((pair) => {
+  const at = pair.indexOf('='), store = pair.slice(0, at).trim().toLowerCase(), tag = pair.slice(at + 1).trim().replace(/^[?&]/, '')
+  return at > 0 && tag ? [[store, tag] as const] : []
+}))
+const shop = (s: { name: string; url: string }) => {
+  const tag = AFFILIATES.get(s.name.toLowerCase())
+  return tag ? { ...s, url: `${s.url}${s.url.includes('?') ? '&' : '?'}${tag}`, sponsored: true } : { ...s, sponsored: false }
+}
+
 export default async function GamePage({ params }: Props) {
   const [g, data] = await Promise.all([getGame((await params).slug), getEvents()])
   if (!g) notFound()
@@ -105,8 +115,9 @@ export default async function GamePage({ params }: Props) {
             {g.stores.length > 0 && (
               <Panel title="Where to buy">
                 <ul className="-my-1 divide-y divide-line/10">
-                  {g.stores.map((s) => <li key={s.url}><a href={s.url} target="_blank" rel="noopener noreferrer nofollow" className="flex items-center justify-between gap-3 py-3 text-[15px] font-semibold decoration-line/40 underline-offset-[3px] hover:underline">{s.name}<Icon name="external" className="h-3.5 w-3.5 text-muted" /></a></li>)}
+                  {g.stores.map(shop).map((s) => <li key={s.url}><a href={s.url} target="_blank" rel={s.sponsored ? 'sponsored noopener noreferrer' : 'noopener noreferrer nofollow'} className="flex items-center justify-between gap-3 py-3 text-[15px] font-semibold decoration-line/40 underline-offset-[3px] hover:underline">{s.name}<Icon name="external" className="h-3.5 w-3.5 text-muted" /></a></li>)}
                 </ul>
+                {g.stores.some((s) => shop(s).sponsored) && <p className="mt-3 text-[13px] text-dim">Some of these links pay Dropdate a share of a sale, at no cost to you.</p>}
               </Panel>
             )}
             <Panel title="Details">
