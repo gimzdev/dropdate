@@ -6,7 +6,7 @@ import { neonRegion } from '@/lib/pgconfig.mjs'
 
 export const metadata: Metadata = { title: 'Terms and privacy', alternates: { canonical: '/legal' } }
 
-const UPDATED = 'October 2026'
+const UPDATED = 'November 2026'
 const PLACES: Record<string, string> = {
   'eu-central-1': 'Frankfurt, Germany', 'eu-west-2': 'London, United Kingdom', 'us-east-1': 'Virginia, United States', 'us-east-2': 'Ohio, United States',
   'us-west-2': 'Oregon, United States', 'ap-southeast-1': 'Singapore', 'ap-southeast-2': 'Sydney, Australia', 'sa-east-1': 'São Paulo, Brazil',
@@ -44,7 +44,7 @@ export default function Legal() {
           <DocSection id="privacy" title="Privacy in short">
             <div className="prose-dd">
               <p>Last updated {UPDATED}. You can use Dropdate without an account, and then nothing about you is collected by the site: your list stays in your browser and never leaves it.</p>
-              <p>An account is <strong>your email address</strong> and <strong>the lists you build</strong> (the games you wishlist, and the games you mark as played, with the ones you also mark as completed), plus the few technical records listed below that keep you signed in and the service safe. There is no password, no name, no photo, no advertising, no analytics and no automated decision about you.</p>
+              <p>An account is <strong>your email address</strong> and <strong>the lists you build</strong> (the games you wishlist, and the games you mark as played, with the ones you also mark as completed), plus the few technical records listed below that keep you signed in and the service safe. There is no password, no name, no photo, no advertising, no tracking from site to site and no automated decision about you.</p>
               <p>At the bottom of your profile you can download a copy of your data or delete the account for good, in one click each.</p>
             </div>
           </DocSection>
@@ -53,6 +53,7 @@ export default function Legal() {
             <ul className="prose-dd list-disc space-y-3 pl-5">
               <li className={li}><strong>Email address.</strong> To sign you in and tell your lists apart from everyone else’s. Without it we cannot offer an account. Kept until you delete the account. An account nobody has signed in to or used for 24 months is deleted automatically.</li>
               <li className={li}><strong>Your wishlist and the games you have played.</strong> The games you chose, the date and time you added each one and, for a played game, when you marked it as completed, so the lists can be sorted and shown to you. Deleted with the account. Each game’s public details (title, date, artwork, Metacritic score) are a shared copy, not personal data.</li>
+              <li className={li}><strong>Release emails</strong> (only if you ask). For a game on your wishlist, <em>Tell me</em> sends an email on its release day and when its date moves. We keep which games you asked about, when you asked, and the date we last told you, so we can tell when it changes. At most one email a day, with nothing to sell in it. Each email has a link that stops them all without signing in, and you can turn them off game by game. Deleted with the account.</li>
               <li className={li}><strong>Sign-in codes.</strong> The six-digit code we email you is stored scrambled (hashed). It works once, for 10 minutes or five wrong tries, and is erased when used or by the daily clean-up.</li>
               <li className={li}><strong>Your sign-in.</strong> One cookie, set only when you sign in, keeps you signed in (and, only while you sign in with Google or Discord, a short-lived one that protects that sign-in). A matching record in our database holds only a secret that matches the cookie, and its dates. A sign-in lasts 30 days and is renewed each time you come back after a day, so you stay signed in as long as you keep using Dropdate. It ends when you sign out, delete the account or stop coming for 30 days. These cookies are strictly necessary for the account to work, so they need no consent banner. Your browser also stores a small marker (<span className="code-inline">dropdate:session</span>) so the header shows the right button, and, signed out, your saved list (<span className="code-inline">dropdate:saved</span>). Neither is sent to anyone.</li>
               <li className={li}><strong>Abuse protection.</strong> To stop someone flooding sign-in emails or the data sources, we count requests per network address, per email address and per account. The counters are stored only as scrambled values and are deleted within two days.</li>
@@ -68,9 +69,9 @@ export default function Legal() {
               <p>The person who decides what is done with your data (the “controller” in the law’s words) is the owner of this site: <Contact />. That is also who to write to about anything on this page.</p>
               <p>Dropdate uses a few companies to run, and they handle data only on our instructions:</p>
               <ul className="list-disc space-y-3 pl-5">
-                <li className={li}><strong><A to="https://vercel.com/legal/privacy-policy">Vercel</A></strong> hosts the site and the sign-in service, and may keep standard request logs.</li>
+                <li className={li}><strong><A to="https://vercel.com/legal/privacy-policy">Vercel</A></strong> hosts the site and the sign-in service, and may keep standard request logs. Its <A to="https://vercel.com/docs/analytics/privacy-policy">Web Analytics</A> counts visits for Dropdate without cookies: the page, where the visit came from, the country and the kind of browser and device, and two clicks (adding a calendar feed, a finished sign-in). None of it names you.</li>
                 <li className={li}><strong><A to="https://neon.com/privacy-policy">Neon</A></strong> stores the database, in {place}. It is encrypted at rest.</li>
-                <li className={li}><strong><A to="https://resend.com/legal/privacy-policy">Resend</A></strong> delivers the sign-in email, so it sees your email address and the code, and keeps its own delivery logs for a short time.</li>
+                <li className={li}><strong><A to="https://resend.com/legal/privacy-policy">Resend</A></strong> delivers the sign-in email and, if you ask for them, the release emails, so it sees your email address and what the email says, and keeps its own delivery logs for a short time.</li>
                 <li className={li}><strong>Google or Discord</strong>, only if you choose to sign in with them.</li>
                 <li className={li}><strong>Your calendar app</strong>, only if you subscribe it to your wishlist link.</li>
                 <li className={li}><strong><A to="https://www.igdb.com">IGDB</A> (run by Twitch), <A to="https://store.steampowered.com">Steam</A> and <A to="https://pandascore.co">PandaScore</A></strong> supply game and esports data. Your browser loads artwork straight from their servers, which can see your IP address, like any website you visit. Nothing about your account goes to them. When you search for a game by name, the words you typed go from our server to IGDB and Steam, without your address. <strong><A to="https://www.youtube.com/t/terms">YouTube</A></strong> loads a trailer only when you press play on it.</li>
@@ -99,6 +100,7 @@ export default function Legal() {
             <p><strong>No accounts.</strong> Dropdate never asks for or stores personal information.</p>
             <p><strong>On your device.</strong> Your saved list lives in your browser’s local storage and never leaves it. Your search is kept in the page address so you can share it.</p>
             <p><strong>Server logs.</strong> The hosting provider may keep standard request logs, such as IP addresses, for security and operations.</p>
+            <p><strong>Visit counts.</strong> <A to="https://vercel.com/docs/analytics/privacy-policy">Vercel Web Analytics</A> counts visits without cookies: the page, where the visit came from, the country and the kind of browser and device, and clicks on adding a calendar feed. None of it names you.</p>
             <p><strong>Third parties.</strong> Game data, artwork and critics’ scores come from <A to="https://www.igdb.com">IGDB</A> and <A to="https://store.steampowered.com">Steam</A>, esports data from <A to="https://pandascore.co">PandaScore</A>. Your browser loads images straight from their servers, and a trailer from YouTube only when you press play. When you search for a game by name, the words you typed go from our server to IGDB and Steam, without your address. Game names, logos and images belong to their owners.</p>
           </div>
         </DocSection>

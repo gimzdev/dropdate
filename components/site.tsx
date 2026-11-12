@@ -11,7 +11,7 @@ export const A = ({ to, children, className }: { to: string; children: ReactNode
     : <a href={to} className={className} {...(to.startsWith('http') && { target: '_blank', rel: 'noopener noreferrer' })}>{children}</a>
 
 const COLUMNS: [string, string[][]][] = [
-  ['Calendar', [['This week', '/#week'], ['Most anticipated', '/#upcoming'], ['Esports', '/#esports'], ['Search', '/#explore'], ['Browse every game', '/browse']]],
+  ['Calendar', [['This week', '/#week'], ['Most anticipated', '/#upcoming'], ['Releases by month', '/releases'], ['Esports by game', '/esports'], ['Search', '/#explore'], ['Browse every game', '/browse']]],
   ['Project', [['Source on GitHub', REPO], ['Terms and privacy', '/legal'], ['CC0 license', 'https://creativecommons.org/publicdomain/zero/1.0/']]],
 ]
 const credit = 'underline decoration-line/30 underline-offset-2 transition hover:text-fg'

@@ -249,12 +249,13 @@ export function Fresh({ items, today: serverToday }: { items: Ev[]; today: strin
 const COLS = 'md:grid-cols-[170px_minmax(0,1fr)_200px_130px]'
 const WHEN = { live: 'text-live', soon: 'text-mark', future: 'text-fg', past: 'text-dim' }
 
-export function Schedule({ items, today: serverToday }: { items: Ev[]; today: string }) {
+/** Tournaments as a table. The home page shows the biggest; an esports page (app/esports) one game's, with its own title. */
+export function Schedule({ items, today: serverToday, id = 'esports', title = 'Esports', lede, className }: { items: Ev[]; today: string; id?: string; title?: string; lede?: string; className?: string }) {
   const today = useToday(serverToday)
   if (!items.length) return null
   const live = items.filter((e) => status(e, today).tone === 'live').length
   return (
-    <Section id="esports" title="Esports" lede={live ? `${live} ${live === 1 ? 'tournament is' : 'tournaments are'} live right now, and the biggest ones coming up.` : 'The biggest tournaments coming up, with their prize pools.'}>
+    <Section id={id} title={title} className={className} lede={lede ?? (live ? `${live} ${live === 1 ? 'tournament is' : 'tournaments are'} live right now, and the biggest ones coming up.` : 'The biggest tournaments coming up, with their prize pools.')}>
       <div className="overflow-hidden rounded-panel bg-panel">
         <div className={`hidden gap-6 border-b border-line/10 px-6 py-3 text-[13px] font-medium text-dim md:grid ${COLS}`}><span>When</span><span>Tournament</span><span>Game</span><span className="text-right">Prize pool</span></div>
         <ul className="divide-y divide-line/[0.07]">

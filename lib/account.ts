@@ -1,6 +1,7 @@
 // The signed-in state in the browser, shared by every button on the page, and the list kept for visitors who are not signed in.
 // A module, not a context: hearts all over the site read and change the same state. A visitor who never signed in makes no request.
 import { useEffect, useSyncExternalStore } from 'react'
+import { track } from '@vercel/analytics'
 import { ACCOUNTS, type Ev, type Flags, type ListName, afterChange } from './core'
 
 // Storage can be blocked or full: nothing here may throw
@@ -48,9 +49,9 @@ export function useNotice() {
 
 
 /** idle: not asked yet (server render, first paint). loading: signed in before, asking again. out, in: answered. */
-export interface Account { phase: 'idle' | 'loading' | 'out' | 'in'; email: string; since: string; wishlist: string[]; played: string[]; completed: string[] }
-type Lists = Pick<Account, 'wishlist' | 'played' | 'completed'>
-const IDLE: Account = { phase: 'idle', email: '', since: '', wishlist: [], played: [], completed: [] }
+export interface Account { phase: 'idle' | 'loading' | 'out' | 'in'; email: string; since: string; wishlist: string[]; played: string[]; completed: string[]; tell: string[] }
+type Lists = Pick<Account, 'wishlist' | 'played' | 'completed'> & { tell?: string[] }
+const IDLE: Account = { phase: 'idle', email: '', since: '', wishlist: [], played: [], completed: [], tell: [] }
 const OUT: Account = { ...IDLE, phase: 'out' }
 let state = IDLE
 const put = (next: Partial<Account>) => { state = { ...state, ...next }; emit() }
@@ -68,7 +69,8 @@ async function load() {
     if (!res.ok) { drop(res); throw new Error(String(res.status)) }
     const me = (await res.json()) as { email: string; since: string } & Lists
     settled.clear()
-    put({ phase: 'in', email: me.email, since: me.since, wishlist: me.wishlist, played: me.played, completed: me.completed ?? [] })
+    put({ phase: 'in', email: me.email, since: me.since, wishlist: me.wishlist, played: me.played, completed: me.completed ?? [], tell: me.tell ?? [] })
+    signedInCounted()
     await mergeSaved()
   } catch {
     if (state.phase === 'loading') put({ ...OUT }) // unreachable now: signed out until the next page asks again
@@ -81,7 +83,7 @@ const start = () => { if (!started) { started = true; void refresh() } }
 export function seed(me: { email: string; since: string } & Lists) {
   setSession(true)
   settled.clear()
-  put({ phase: 'in', ...me })
+  put({ phase: 'in', ...me, tell: me.tell ?? [] })
 }
 
 export function useAccount(): Account {
@@ -92,7 +94,8 @@ export function useAccount(): Account {
 
 const flagsOf = (key: string): Flags => ({ wishlist: state.wishlist.includes(key), played: state.played.includes(key), completed: state.completed.includes(key) })
 const place = (list: string[], key: string, on: boolean) => (on ? (list.includes(key) ? list : [key, ...list]) : list.filter((k) => k !== key))
-const apply = (key: string, f: Flags) => put({ wishlist: place(state.wishlist, key, f.wishlist), played: place(state.played, key, f.played), completed: place(state.completed, key, f.completed) })
+// a game off the wishlist takes its emails with it (lib/library.ts does the same)
+const apply = (key: string, f: Flags) => put({ wishlist: place(state.wishlist, key, f.wishlist), played: place(state.played, key, f.played), completed: place(state.completed, key, f.completed), tell: f.wishlist ? state.tell : place(state.tell, key, false) })
 
 export const signedInNow = () => state.phase === 'in'
 export const ready = () => (ACCOUNTS && (state.phase === 'idle' || state.phase === 'loading') ? refresh() : Promise.resolve())
@@ -150,6 +153,33 @@ export async function setList(list: ListName, key: string, on: boolean): Promise
 }
 
 
+/** "Tell me" on or off for a game on the wishlist (an email on its release day and when its date moves): shown at once, then saved. */
+export async function setTell(key: string, on: boolean): Promise<boolean> {
+  await ready()
+  if (state.phase !== 'in' || state.tell.includes(key) === on) return state.tell.includes(key)
+  put({ tell: place(state.tell, key, on) })
+  let message = 'Could not change that. Check your connection and try again.'
+  try {
+    const res = await fetch('/api/library/tell', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, on }) })
+    if (res.status === 401) { drop(res); out(); notify('You were signed out. Sign in again to keep going.'); return false }
+    const body = (await res.json().catch(() => null)) as { on?: boolean; error?: string } | null
+    if (res.ok && typeof body?.on === 'boolean') { put({ tell: place(state.tell, key, body.on) }); return body.on }
+    message = body?.error ?? message
+  } catch {}
+  put({ tell: place(state.tell, key, !on) })
+  notify(message)
+  return !on
+}
+
+// signin_done (anonymous, Vercel Analytics): counted once, when a sign-in started on this tab has come back signed in
+const PENDING = 'dropdate:signin'
+export const signInStarted = (method: string) => { try { sessionStorage.setItem(PENDING, method) } catch {} }
+function signedInCounted() {
+  let method: string | null = null
+  try { method = sessionStorage.getItem(PENDING); sessionStorage.removeItem(PENDING) } catch {}
+  if (method) track('signin_done', { method })
+}
+
 const NONE: string[] = []
 let raw: string | null = null, saved = NONE
 function readSaved() {
@@ -182,7 +212,7 @@ async function mergeSaved() {
     const left = readSaved().filter((k) => !j.done.includes(k))
     keepSaved(left)
     settled.clear()
-    put({ wishlist: j.wishlist, played: j.played, completed: j.completed ?? state.completed })
+    put({ wishlist: j.wishlist, played: j.played, completed: j.completed ?? state.completed, tell: j.tell ?? state.tell })
     if (j.added) notify(`Added ${j.added} ${j.added === 1 ? 'game' : 'games'} you saved on this device to your wishlist.${left.length ? ` ${left.length} could not be added yet and will be tried again.` : ''}`)
   } catch {}
 }
@@ -218,12 +248,14 @@ async function call(path: string, body: unknown) {
 export const requestCode = (email: string) => call('/api/signin/code', { email })
 export async function confirmCode(email: string, otp: string) {
   await call('/api/auth/sign-in/email-otp', { email, otp })
+  signInStarted('email')
   setSession(true)
   await refresh()
 }
 export async function startProvider(provider: 'google' | 'discord', next: string) {
   const j = await call('/api/auth/sign-in/social', { provider, callbackURL: next, errorCallbackURL: `/signin?error=provider&next=${encodeURIComponent(next)}` })
   if (!j?.url) throw new AuthError('NO_URL', '')
+  signInStarted(provider) // counted on the way back, once signed in
   setSession(true) // a 401 on the way back clears it again
   location.assign(j.url)
 }

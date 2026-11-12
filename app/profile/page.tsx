@@ -6,6 +6,7 @@ import { Footer } from '@/components/site'
 import { Header } from '@/components/ui'
 import { type Me, me } from '@/lib/auth'
 import { ACCOUNTS, type LibItem, iso } from '@/lib/core'
+import { canEmail } from '@/lib/db'
 import { library } from '@/lib/library'
 
 export const metadata: Metadata = { title: 'Your games', robots: { index: false, follow: false } }
@@ -23,7 +24,7 @@ export default async function ProfilePage() {
       <Header />
       <main id="main" className="wrap pt-28 pb-20 md:pt-36 md:pb-28">
         <h1 className="display text-[clamp(3rem,4vw+1.75rem,5.5rem)]">Your games</h1>
-        {user && items ? <Profile user={{ email: user.email, since: user.since }} items={items} today={iso(new Date())} />
+        {user && items ? <Profile user={{ email: user.email, since: user.since }} items={items} today={iso(new Date())} emails={canEmail()} />
           : <p className="mt-6 max-w-xl text-lg text-muted">Your account is unavailable for a moment. Reload the page in a minute.</p>}
       </main>
       <Footer />

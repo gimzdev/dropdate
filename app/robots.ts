@@ -8,6 +8,6 @@ const KEPT_OUT = ['SERankingBacklinksBot', 'AhrefsBot', 'SemrushBot', 'MJ12bot',
 
 // "/browse?" keeps crawlers off the thousands of filtered browse pages (the plain one stays open)
 export default (): MetadataRoute.Robots => ({
-  rules: [{ userAgent: '*', allow: '/', disallow: ['/api/', '/profile', '/signin', '/browse?'] }, { userAgent: KEPT_OUT, disallow: '/' }],
+  rules: [{ userAgent: '*', allow: '/', disallow: ['/api/', '/profile', '/signin', '/tell/', '/browse?'] }, { userAgent: KEPT_OUT, disallow: '/' }],
   sitemap: `${SITE}/sitemap.xml`,
 })

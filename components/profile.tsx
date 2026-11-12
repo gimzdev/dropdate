@@ -3,8 +3,8 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { deleteAccount, drop, notify, seed, setList, signOut, useAccount } from '@/lib/account'
-import { type Ev, type Found, type LibItem, TABS, type TabName, monthYear, status } from '@/lib/core'
+import { deleteAccount, drop, notify, seed, setList, setTell, signOut, useAccount } from '@/lib/account'
+import { type Ev, type Found, type LibItem, TABS, type TabName, canTell, monthYear, status } from '@/lib/core'
 import { SupportNote } from './support'
 import { DateBlock, FeedPanel, Heart, Icon, Img, Open, Score, TONE, Thumb, useLookup, useOutside, useToday } from './ui'
 
@@ -12,6 +12,7 @@ import { DateBlock, FeedPanel, Heart, Icon, Img, Open, Score, TONE, Thumb, useLo
 
 const PAGE = 60
 const corner = 'grid h-10 w-10 place-items-center rounded-full bg-black/55 text-white/90 ring-1 ring-white/15 backdrop-blur-md transition ring-inset hover:bg-black/75 hover:text-white'
+const cornerOn = 'grid h-10 w-10 place-items-center rounded-full bg-mark text-black ring-1 ring-black/10 transition ring-inset hover:brightness-95'
 const quiet = 'text-[15px] font-medium text-muted underline decoration-line/30 underline-offset-4 transition hover:text-fg'
 const empty = 'rounded-panel border border-dashed border-line/12 px-6 text-center'
 const platforms = (e: Ev) => e.platforms.map((p) => (p === 'PlayStation' ? 'PS' : p)).join(', ')
@@ -22,8 +23,8 @@ function wishlistOrder(list: Ev[], today: string) {
   return [...list].sort((a, b) => rank(a) - rank(b) || (rank(a) === 2 ? b.start.localeCompare(a.start) : (a.start || '9').localeCompare(b.start || '9') || a.title.localeCompare(b.title)))
 }
 
-/** A game as a card; a played game has its own "Completed" button. */
-function Tile({ e, list, today, done }: { e: Ev; list: TabName; today: string; done: boolean }) {
+/** A game as a card; a played game has its own "Completed" button, a game ahead on the wishlist its "Tell me" bell (`telling`: on). */
+function Tile({ e, list, today, done, telling }: { e: Ev; list: TabName; today: string; done: boolean; telling?: boolean }) {
   const esport = e.kind === 'tournament', out = !esport && !!e.start && e.start <= today, played = list === 'played'
   const [fresh, setFresh] = useState(false) // a moment after completing: the soft green pulse
   useEffect(() => { if (!fresh) return; const t = setTimeout(() => setFresh(false), 1100); return () => clearTimeout(t) }, [fresh])
@@ -62,6 +63,10 @@ function Tile({ e, list, today, done }: { e: Ev; list: TabName; today: string; d
         </button>
       )}
       <div className="absolute top-2.5 right-2.5 flex gap-1.5">
+        {telling !== undefined && (
+          <button type="button" aria-pressed={telling} title={telling ? 'Emails on. Press to stop them' : 'Tell me: an email on its release day, and when its date moves'} aria-label={`Email me about ${e.title}`} className={telling ? cornerOn : corner}
+            onClick={async () => { const now = await setTell(e.id, !telling); if (now !== telling) notify(now ? `We will email you on the release day of ${e.title}, and if its date moves.` : `No more emails about ${e.title}.`) }}><Icon name="bell" /></button>
+        )}
         {!played && out && (
           <button type="button" title="I have played this" aria-label={`Mark ${e.title} as played`} className={`${corner} hover:bg-go hover:text-black`}
             onClick={async () => { if (await setList('played', e.id, true)) notify(`${e.title} moved to the games you have played.`) }}><Icon name="pad" /></button>
@@ -175,7 +180,7 @@ const EMPTY = {
   played: ['No games marked as played yet', 'Open a game and press “Played”, or search for the ones you have played above.'],
 }
 
-export function Profile({ user, items, today: serverToday }: { user: { email: string; since: string }; items: LibItem[]; today: string }) {
+export function Profile({ user, items, today: serverToday, emails }: { user: { email: string; since: string }; items: LibItem[]; today: string; emails: boolean }) {
   const router = useRouter(), params = useSearchParams(), today = useToday(serverToday), account = useAccount()
   const wanted: TabName = TABS.find((l) => l === params.get('tab')) ?? 'wishlist'
   const [show, setShow] = useState<'all' | 'done' | 'open'>('all'), [tab, setTab] = useState<TabName>(wanted), [limit, setLimit] = useState(PAGE), [added, setAdded] = useState<Ev[]>([]), [origin, setOrigin] = useState('')
@@ -184,8 +189,8 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
 
   // what the server rendered, newest first; the account store takes over from there
   const first = useMemo(() => {
-    const keys = (f: 'wishlisted' | 'played' | 'completed') => items.filter((i) => i[f]).sort((a, b) => b[f]!.localeCompare(a[f]!)).map((i) => i.ev.id)
-    return { wishlist: keys('wishlisted'), played: keys('played'), completed: keys('completed') }
+    const keys = (f: 'wishlisted' | 'played' | 'completed' | 'tell') => items.filter((i) => i[f]).sort((a, b) => b[f]!.localeCompare(a[f]!)).map((i) => i.ev.id)
+    return { wishlist: keys('wishlisted'), played: keys('played'), completed: keys('completed'), tell: keys('tell') }
   }, [items])
   useEffect(() => seed({ email: user.email, since: user.since, ...first }), [first, user.email, user.since])
 
@@ -238,11 +243,15 @@ export function Profile({ user, items, today: serverToday }: { user: { email: st
         </div>
       )}
 
+      {emails && tab === 'wishlist' && rows.some((e) => canTell(e, today)) && (
+        <p className="mt-8 flex items-center gap-2 text-[15px] text-muted"><Icon name="bell" className="h-4 w-4 shrink-0" />The bell on a game not out yet emails you on its release day, and if its date moves.</p>
+      )}
+
       <section aria-label={tab === 'wishlist' ? 'Your wishlist' : 'Games you have played'} className="mt-10">
         {rows.length > 0 ? (
           <>
             <ul className="grid grid-cols-2 gap-x-3.5 gap-y-8 sm:grid-cols-3 sm:gap-x-5 lg:grid-cols-4">
-              {rows.slice(0, limit).map((e) => <Tile key={`${tab}-${e.id}`} e={e} list={tab} today={today} done={finished.has(e.id)} />)}
+              {rows.slice(0, limit).map((e) => <Tile key={`${tab}-${e.id}`} e={e} list={tab} today={today} done={finished.has(e.id)} telling={emails && tab === 'wishlist' && canTell(e, today) ? keys.tell.includes(e.id) : undefined} />)}
             </ul>
             {rows.length > limit && <div className="mt-10 text-center"><button type="button" onClick={() => setLimit((l) => l + PAGE * 2)} className="btn btn-line px-7">Show more<span className="text-muted">{rows.length - limit} left</span></button></div>}
           </>

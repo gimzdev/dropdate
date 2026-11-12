@@ -97,13 +97,15 @@ export const TABS = ['wishlist', 'played'] as const
 export type TabName = (typeof TABS)[number]
 export const GAME_KEY = /^(?:steam|igdb|ps)-\d{1,12}$/
 export interface Flags { wishlist: boolean; played: boolean; completed: boolean }
-export interface LibItem { ev: Ev; wishlisted?: string; played?: string; completed?: string }
+export interface LibItem { ev: Ev; wishlisted?: string; played?: string; completed?: string; tell?: string }
 /** The server's rules: played or completed leaves the wishlist, completing plays, un-playing un-completes. */
 export function afterChange(f: Flags, list: ListName, on: boolean): Flags {
   if (list === 'wishlist') return { ...f, wishlist: on }
   if (list === 'played') return on ? { wishlist: false, played: true, completed: f.completed } : { wishlist: f.wishlist, played: false, completed: false }
   return on ? { wishlist: false, played: true, completed: true } : { ...f, completed: false }
 }
+/** "Tell me" (lib/tell.ts) is for a release still ahead (after today), or without a day yet. */
+export const canTell = (e: Pick<Ev, 'kind' | 'start' | 'tba'>, today: string) => e.kind === 'release' && (!e.start || !!e.tba || e.start > today)
 /** A same-site path to go back to after signing in: no //, backslashes, control or non-ASCII characters ("/<tab>/evil" is "//evil"). */
 export const safeNext = (n?: string | null, fallback = '/profile') => (n && /^\/(?![/\\])(?!signin(?:[/?#]|$))[^\x00-\x20\x7f-￿\\]*$/.test(n) ? n : fallback)
 
@@ -169,3 +171,16 @@ export function browseHref(q: Partial<BrowseQuery>) {
   const s = p.toString()
   return s ? `/browse?${s}` : '/browse'
 }
+
+// ── Pages people search for (app/releases, app/esports): a month's releases, a platform's, an esports game's tournaments ──
+
+export const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'] as const
+/** 2026-11 is /releases/2026/november. */
+export const monthPath = (month: string) => `/releases/${month.slice(0, 4)}/${MONTHS[+month.slice(5, 7) - 1]}`
+/** The month after (1) or before (-1) a YYYY-MM month. */
+export const nextMonth = (month: string, n = 1) => iso(new Date(+month.slice(0, 4), +month.slice(5, 7) - 1 + n, 1)).slice(0, 7)
+export const PLATFORM_PAGES: Record<string, Platform> = { pc: 'PC', playstation: 'PlayStation', xbox: 'Xbox', nintendo: 'Nintendo', mobile: 'Mobile' }
+export const platformPath = (p: Platform) => `/releases/${p.toLowerCase()}`
+/** An esports game's address, from its name as PandaScore gives it: Counter-Strike is /esports/counter-strike. */
+export const gameSlug = (name: string) => name.toLowerCase().normalize('NFKD').replace(/\p{M}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+export const esportsPath = (name: string) => `/esports/${gameSlug(name)}`

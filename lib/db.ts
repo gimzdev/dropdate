@@ -115,29 +115,42 @@ export async function allow(name: string, max: number, windowSec: number): Promi
   return true
 }
 
-// ── The sign-in email, through Resend's HTTP API: no SDK, no tracking, no links, only the code ──
+// ── Email, through Resend's HTTP API: no SDK, no tracking pixels, no rewritten links ──
 
 export const devCodes = () => env.DD_DEV_CODES === '1' && !env.VERCEL
 export const canEmail = () => !!env.RESEND_API_KEY || devCodes()
 
-export async function sendCode(to: string, code: string) {
+/** One email. Without RESEND_API_KEY (only on this machine, with DD_DEV_CODES=1) it is printed to the terminal instead. */
+export async function sendMail(m: { to: string; subject: string; text: string; html: string; headers?: Record<string, string> }) {
   const key = env.RESEND_API_KEY
   if (!key) {
     if (!devCodes()) throw new Error('Email is not configured: set RESEND_API_KEY')
-    return console.info(`\n  [dropdate] sign-in code for ${to}: ${code}\n`)
+    return console.info(`\n  [dropdate] email to ${m.to}: ${m.subject}\n${m.text.replace(/^/gm, '    ')}\n`)
   }
-  const note = 'It works once and expires in 10 minutes. If you did not ask for it, you can ignore this email.'
-  const html = `<!doctype html><html lang="en"><body style="margin:0;background:#f4f3ef;font-family:Arial,Helvetica,sans-serif;color:#111">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:40px 16px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:420px;background:#fff;border-radius:16px"><tr><td style="padding:32px">
-<p style="margin:0 0 24px;font-size:20px;font-weight:700">Dropdate</p>
-<p style="margin:0 0 12px;font-size:16px;line-height:1.5">Your sign-in code:</p>
-<p style="margin:0 0 20px;font-size:36px;font-weight:800;letter-spacing:8px;background:#ffd23f;border-radius:12px;padding:14px 0;text-align:center">${code}</p>
-<p style="margin:0;font-size:14px;line-height:1.5;color:#555">${note}</p>
-</td></tr></table></td></tr></table></body></html>`
   const res = await fetch(`${(env.RESEND_BASE || 'https://api.resend.com').replace(/\/$/, '')}/emails`, {
     method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(10_000),
-    body: JSON.stringify({ from: env.EMAIL_FROM || `Dropdate <login@${new URL(SITE).hostname}>`, to: [to], subject: `${code} is your Dropdate sign-in code`, text: `Your Dropdate sign-in code is ${code}\n\n${note}`, html }),
+    body: JSON.stringify({ from: env.EMAIL_FROM || `Dropdate <login@${new URL(SITE).hostname}>`, to: [m.to], subject: m.subject, text: m.text, html: m.html, ...(m.headers && { headers: m.headers }) }),
   })
   if (!res.ok) throw new Error(`Resend answered ${res.status}: ${(await res.text()).slice(0, 300)}`)
+}
+
+/** Text for an email's HTML. */
+export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
+/** The frame every Dropdate email shares: a white card on paper, the name on top. */
+export const mailFrame = (inner: string, width = 420) => `<!doctype html><html lang="en"><body style="margin:0;background:#f4f3ef;font-family:Arial,Helvetica,sans-serif;color:#111">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:40px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:${width}px;background:#fff;border-radius:16px"><tr><td style="padding:32px">
+<p style="margin:0 0 24px;font-size:20px;font-weight:700">Dropdate</p>
+${inner}
+</td></tr></table></td></tr></table></body></html>`
+
+export async function sendCode(to: string, code: string) {
+  if (!env.RESEND_API_KEY && devCodes()) return console.info(`\n  [dropdate] sign-in code for ${to}: ${code}\n`)
+  const note = 'It works once and expires in 10 minutes. If you did not ask for it, you can ignore this email.'
+  await sendMail({
+    to, subject: `${code} is your Dropdate sign-in code`, text: `Your Dropdate sign-in code is ${code}\n\n${note}`,
+    html: mailFrame(`<p style="margin:0 0 12px;font-size:16px;line-height:1.5">Your sign-in code:</p>
+<p style="margin:0 0 20px;font-size:36px;font-weight:800;letter-spacing:8px;background:#ffd23f;border-radius:12px;padding:14px 0;text-align:center">${code}</p>
+<p style="margin:0;font-size:14px;line-height:1.5;color:#555">${note}</p>`),
+  })
 }

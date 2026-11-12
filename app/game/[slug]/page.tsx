@@ -5,9 +5,10 @@ import type { ReactNode } from 'react'
 import { About, Gallery, Rail, Trailer } from '@/components/game'
 import { Footer } from '@/components/site'
 import { SupportNote } from '@/components/support'
-import { BigDate, Countdown, Header, Icon, Progress, SaveButton } from '@/components/ui'
-import { ACCOUNTS, SITE, googleUrl, longDate, monthLabel, scoreTone, srcSet, status } from '@/lib/core'
-import { getEvents, getGame, getSimilar } from '@/lib/data'
+import { BigDate, Countdown, Header, Icon, Progress, SaveButton, TellButton } from '@/components/ui'
+import { ACCOUNTS, SITE, canTell, googleUrl, longDate, monthLabel, monthPath, platformPath, scoreTone, srcSet, status } from '@/lib/core'
+import { getEvents, getGame, getSimilar, monthBounds } from '@/lib/data'
+import { canEmail } from '@/lib/db'
 
 export const revalidate = 21600
 export const generateStaticParams = async () => [] // built on the first visit, then kept and refreshed every 6 hours
@@ -57,6 +58,12 @@ export default async function GamePage({ params }: Props) {
     ['Average playtime', g.playtime ? `${g.playtime} hours` : ''], [g.scoreFrom ? 'Critics (IGDB)' : 'Metacritic', g.metacritic ? `${g.metacritic} out of 100` : 'No score yet'],
     ['Player rating (IGDB)', g.rating ? `${g.rating.toFixed(1)} out of 5` : ''], ['Age rating', g.age ?? ''],
   ])
+  // The lists this game is on: its month, and while it is ahead, its platforms (app/releases)
+  const bounds = monthBounds(today), month = date?.slice(0, 7)
+  const lists: [string, string][] = [
+    ...(month && month >= bounds.first && month <= bounds.last ? [[`${monthLabel(month)} releases`, monthPath(month)] as [string, string]] : []),
+    ...(upcoming ? (ev?.platforms ?? []).map((p): [string, string] => [`Upcoming ${p === 'Mobile' ? 'mobile' : p} games`, platformPath(p)]) : []),
+  ]
   const ld = { '@context': 'https://schema.org', '@type': 'VideoGame', name: g.name, url: `${SITE}/game/${g.slug}`, image: g.image, description: g.description?.slice(0, 300), datePublished: date, genre: g.genres, gamePlatform: g.platforms, publisher: g.publishers.map((name) => ({ '@type': 'Organization', name })) }
   return (
     <>
@@ -84,6 +91,7 @@ export default async function GamePage({ params }: Props) {
               <div className="mt-7 flex flex-wrap gap-3">
                 {date && <a href={googleUrl({ title: g.name, start: date, slug: g.slug })} {...out} className="btn btn-mark"><Icon name="plus" />Add to calendar</a>}
                 {(ev || ACCOUNTS) && <SaveButton id={g.id} title={g.name} label variant="glass" needsAccount={!ev} />}
+                {ACCOUNTS && canEmail() && canTell({ kind: 'release', start: date ?? '', tba }, today) && <TellButton id={g.id} title={g.name} />}
                 {ACCOUNTS && released && <Progress id={g.id} title={g.name} />}
                 {g.website && <a href={g.website} {...out} className="btn btn-glass">Official site<Icon name="external" className="h-3.5 w-3.5" /></a>}
               </div>
@@ -125,6 +133,13 @@ export default async function GamePage({ params }: Props) {
                 {details.map(([k, v]) => <div key={k} className="flex justify-between gap-4 py-3 text-[15px]"><dt className="text-muted">{k}</dt><dd className="text-right font-medium">{v}</dd></div>)}
               </dl>
             </Panel>
+            {lists.length > 0 && (
+              <Panel title="More releases">
+                <ul className="-my-1 divide-y divide-line/10">
+                  {lists.map(([name, to]) => <li key={to}><Link href={to} className="flex items-center justify-between gap-3 py-3 text-[15px] font-semibold decoration-line/40 underline-offset-[3px] hover:underline">{name}<Icon name="right" className="h-3.5 w-3.5 text-muted" /></Link></li>)}
+                </ul>
+              </Panel>
+            )}
             {g.tags.length > 0 && (
               <Panel title="Tags"><ul className="flex flex-wrap gap-1.5">{g.tags.map((t) => <li key={t} className="rounded-full px-3 py-1 text-[13px] text-muted ring-1 ring-line/12 ring-inset">{t}</li>)}</ul></Panel>
             )}

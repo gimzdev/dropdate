@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { type AnchorHTMLAttributes, type ReactNode, type RefObject, type SyntheticEvent, type TouchEvent, useEffect, useRef, useState } from 'react'
-import { dismiss, drop, notify, ready, setList, signOut, signedInNow, useAccount, useNotice, useSaved } from '@/lib/account'
+import { dismiss, drop, notify, ready, setList, setTell, signOut, signedInNow, useAccount, useNotice, useSaved } from '@/lib/account'
 import { ACCOUNTS, type Ev, type Found, PLATFORMS, type Platform, ago, href, iso, longDate, monthLabel, monthShort, scoreTone, status, toDate, webcal, weekday } from '@/lib/core'
 import { Heart, Icon, Logo } from './icons'
 import { track } from '@vercel/analytics'
@@ -162,6 +162,21 @@ export function SaveButton({ id, title, label, variant = 'art', needsAccount }: 
   )
 }
 
+/** "Tell me" on a game page: for someone signed in, once the game is on their wishlist. An email on its release day and when its date moves. */
+export function TellButton({ id, title }: { id: string; title: string }) {
+  const account = useAccount(), on = account.tell.includes(id)
+  if (account.phase !== 'in' || !account.wishlist.includes(id)) return null
+  const flip = async () => {
+    const now = await setTell(id, !on)
+    if (now !== on) notify(now ? `We will email ${account.email} on the release day of ${title}, and if its date moves.` : `No more emails about ${title}.`)
+  }
+  return (
+    <button type="button" aria-pressed={on} onClick={() => void flip()} title={on ? 'Emails on. Press to stop them' : 'An email on its release day, and when its date moves'} className="btn btn-glass">
+      <span className={on ? 'text-mark' : ''}><Icon name="bell" /></span>{on ? 'Emails on' : 'Tell me'}
+    </button>
+  )
+}
+
 export function Updated({ at }: { at: string }) {
   const now = useNow(6e4)
   return <>{now === undefined ? 'recently' : ago(at)}</>
@@ -275,11 +290,11 @@ function AccountMenu({ className }: { className: string }) {
   const slim = `${className} w-9 px-0 sm:w-auto sm:px-4`, link = <><Icon name="user" /><span className="hidden sm:inline">Sign in</span></>
   if (account.phase === 'idle' || account.phase === 'loading') return (
     <>
-      <Link href={signInHref(path)} className={`${slim} signed:hidden`}>{link}</Link>
+      <Link href={signInHref(path)} aria-label="Sign in" className={`${slim} signed:hidden`}>{link}</Link>
       <span aria-hidden className={`${className} pointer-events-none hidden w-9 px-0 opacity-60 signed:inline-flex`}><Icon name="user" /></span>
     </>
   )
-  if (account.phase === 'out') return <Link href={signInHref(path)} className={slim}>{link}</Link>
+  if (account.phase === 'out') return <Link href={signInHref(path)} aria-label="Sign in" className={slim}>{link}</Link>
   const item = 'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium text-muted transition hover:bg-raised hover:text-fg'
   return (
     <div ref={box} className="relative" onBlur={(e) => { if (open && !box.current?.contains(e.relatedTarget as Node | null)) setOpen(false) }}>

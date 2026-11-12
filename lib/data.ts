@@ -2,7 +2,7 @@
 // scores, trailers and long descriptions; PandaScore adds esports. Each source fails soft: whatever answers is shown.
 import { unstable_cache } from 'next/cache'
 import { cache } from 'react'
-import { type BrowseQuery, type Ev, type Found, type Game, type Payload, type Platform, BROWSE_PAGE, BROWSE_PAGES, expandQuery, iso, lite, shift } from './core'
+import { type BrowseQuery, type Ev, type Found, type Game, type Payload, type Platform, BROWSE_PAGE, BROWSE_PAGES, expandQuery, gameSlug, iso, lite, shift } from './core'
 import { allow, hasDb, q } from './db'
 
 const env = process.env
@@ -524,3 +524,62 @@ export const getGame = cache(async (slug: string): Promise<Game | null> => {
   }
   return game
 })
+
+// ── The pages people search for (app/releases, app/esports), from the same data ──
+
+/** The calendar, or in production an error when every source failed with nothing kept: the page keeps its last good copy. */
+async function liveEvents() {
+  const data = await getEvents()
+  if (data.error && process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE !== 'phase-production-build') throw new Error(data.error)
+  return data
+}
+/** The months with a release page: from January of last year to the calendar's last month. The calendar holds every month from `held` on. */
+export const monthBounds = (today: string) => ({ first: `${+today.slice(0, 4) - 1}-01`, last: shift(today, 730).slice(0, 7), held: shift(today, -60) })
+const lastDay = (month: string) => iso(new Date(+month.slice(0, 4), +month.slice(5, 7), 0))
+const byDate = (a: Ev, b: Ev) => a.start.localeCompare(b.start) || b.pop - a.pop
+const bare = ({ image: _, shots: __, ...e }: Ev): Ev => e // the cards' hover frames load on the first hover (/api/shots)
+
+/** A month's releases by date: from the hourly calendar when it holds the whole month, from IGDB (kept a week) for a month before. null: no page. */
+export async function monthReleases(month: string): Promise<{ events: Ev[]; today: string; updated?: string } | null> {
+  const data = await liveEvents(), { today } = data, { first, last, held } = monthBounds(today), from = `${month}-01`, to = lastDay(month)
+  if (month < first || month > last) return null
+  if (from >= held) return { events: data.events.filter((e) => e.kind === 'release' && e.start >= from && e.start <= to).sort(byDate).map(bare), today, updated: data.updated }
+  const rows = await igdb(`fields ${IG_FIELDS}; where first_release_date >= ${unix(from)} & first_release_date < ${unix(shift(to, 1))} & (hypes > 0 | total_rating_count > 0) & ${CATALOG}; sort total_rating_count desc; limit 150;`, 7 * DAY)
+  if (rows === undefined) throw new Error('IGDB did not answer')
+  const events = rows.filter((g) => precision(g) !== 'vague').flatMap((g) => igdbEv(g, 'browse') ?? []).filter((e) => e.start >= from && e.start <= to)
+  return { events: events.sort(byDate).map(bare), today }
+}
+
+/** Every month with a page, and how many releases it holds where the calendar has it (a month before comes from IGDB: no count). */
+export async function releaseMonths(): Promise<{ month: string; count?: number }[]> {
+  const data = await liveEvents(), { first, last, held } = monthBounds(data.today), counts = new Map<string, number>(), out: { month: string; count?: number }[] = []
+  for (const e of data.events) if (e.kind === 'release' && e.start >= held) counts.set(e.start.slice(0, 7), (counts.get(e.start.slice(0, 7)) ?? 0) + 1)
+  for (let m = first; m <= last; m = iso(new Date(+m.slice(0, 4), +m.slice(5, 7), 1)).slice(0, 7)) out.push(`${m}-01` >= held ? { month: m, count: counts.get(m) ?? 0 } : { month: m })
+  return out
+}
+
+/** One platform's releases: those ahead by date, and those out in the last 30 days, most followed first. */
+export async function platformReleases(p: Platform) {
+  const data = await liveEvents(), { today } = data, on = data.events.filter((e) => e.kind === 'release' && e.platforms.includes(p))
+  return {
+    today, updated: data.updated, ahead: on.filter((e) => e.start >= today).sort(byDate).map(bare),
+    recent: on.filter((e) => e.start < today && e.start >= shift(today, -30)).sort((a, b) => b.pop - a.pop).map(bare),
+  }
+}
+
+/** The esports games the calendar holds, by address, each with its tournaments: live or ahead by date, and those just ended. */
+export async function esportsGames() {
+  const data = await liveEvents(), { today } = data, games = new Map<string, { name: string; ahead: Ev[]; ended: Ev[] }>()
+  for (const e of data.events) {
+    if (e.kind !== 'tournament' || !e.genres[0]) continue
+    const slug = gameSlug(e.genres[0]), g = games.get(slug) ?? { name: e.genres[0], ahead: [], ended: [] }
+    if ((e.end ?? e.start) >= today) g.ahead.push(bare(e))
+    else g.ended.push(bare(e))
+    games.set(slug, g)
+  }
+  for (const g of games.values()) {
+    g.ahead.sort(byDate)
+    g.ended.sort((a, b) => (b.end ?? b.start).localeCompare(a.end ?? a.start))
+  }
+  return { today, updated: data.updated, games }
+}
