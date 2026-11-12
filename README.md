@@ -2,9 +2,11 @@
 
 # Dropdate
 
-Game releases and esports tournaments in one calendar, with a free API.
+Game releases and esports tournaments in one calendar, with feeds for Google, Apple and Outlook.
 
-[dropdate.net](https://dropdate.net) · [API](https://dropdate.net/docs) · Next.js · TypeScript · PostgreSQL
+[dropdate.net](https://dropdate.net) · Next.js · TypeScript · PostgreSQL
+
+<img src="docs/screenshots/dropdate-preview.gif" alt="Dropdate: a featured game, this week's releases, then a search for Red Dead in Browse">
 
 <table>
 <tr>
@@ -17,9 +19,11 @@ Game releases and esports tournaments in one calendar, with a free API.
 </tr>
 </table>
 
+<hr>
+
 Dropdate puts every game release and esports tournament in one calendar. Search it in plain English, keep
 a wishlist, and add any view to Google, Apple or Outlook calendars so it follows a game when the date
-slips. It also has a free API, no key needed.
+slips.
 
 | | |
 |:---|:---|
@@ -27,7 +31,7 @@ slips. It also has a free API, no key needed.
 | **Games** | Dates, artwork and critic scores; filters for platform and genre |
 | **Esports** | Live and upcoming tournaments with dates and prize pools |
 | **Accounts** | A wishlist and the games you played, each markable as completed |
-| **Free API** | JSON or iCalendar, e.g. `/api/events?q=ps5 releases next month` ([docs](https://dropdate.net/docs)) |
+| **Calendar feeds** | Any view or your wishlist in Google, Apple or Outlook calendars, updated when a date moves |
 
 Game data comes from IGDB and Steam, tournaments from PandaScore, and accounts live in PostgreSQL. A source
 without a key is simply skipped.
