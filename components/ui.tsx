@@ -476,7 +476,21 @@ export function Card({ e, today: serverToday, row, when, outside, lazy }: { e: E
  */
 export function DayGrid({ items, today: serverToday, ahead, max, className }: { items: Ev[]; today: string; ahead?: boolean; max: number; className: string }) {
   const today = useToday(serverToday)
-  return <div className={className}>{items.filter((e) => (e.start >= today) === !!ahead).slice(0, max).map((e) => <Card key={e.id} e={e} today={today} row lazy />)}</div>
+  const shown = items.filter((e) => (e.start >= today) === !!ahead).slice(0, max)
+  return <div className={className}>{shown.map((e) => <Card key={e.id} e={e} today={today} row lazy />)}</div>
+}
+
+/** A month page's opening line, in the tense of the visitor's own day: what is dated for a month ahead, how much of this month is out, or what came out in a month gone by. */
+export function MonthIntro({ month, label, days, loose, both, today: serverToday }: { month: string; label: string; days: string[]; loose: number; both: boolean; today: string }) {
+  const today = useToday(serverToday), now = today.slice(0, 7), out = days.filter((d) => d <= today).length
+  const more = loose ? `, and ${loose} set for ${label.split(' ')[0]} without a day` : ''
+  return <>{month > now ? `The ${days.length} most awaited games dated for ${label}${more}. Dates from IGDB and Steam, checked every hour.`
+    : month === now ? `The ${days.length} most awaited games of ${label}${more}: ${out} out so far, ${days.length - out} still to come. Dates from IGDB and Steam, checked every hour.`
+      : `The ${days.length} most followed games released in ${label}, by day${more}. Dates from ${both ? 'IGDB and Steam' : 'IGDB'}.`}</>
+}
+/** One of two wordings, by whether a month is over on the visitor's own day. */
+export function Over({ month, today: serverToday, then, now }: { month: string; today: string; then: string; now: string }) {
+  return <>{month < useToday(serverToday).slice(0, 7) ? then : now}</>
 }
 
 export function Countdown({ start, today, className = '' }: { start: string; today: string; className?: string }) {

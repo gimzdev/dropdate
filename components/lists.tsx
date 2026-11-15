@@ -35,7 +35,7 @@ export function ListPage({ trail, title, intro, ld, children }: { trail: Trail; 
               {trail.slice(0, -1).map(([name, path], i) => (
                 <li key={path} className="inline-flex items-center gap-2">
                   {i === 0 && <Icon name="left" className="h-3.5 w-3.5" />}
-                  <Link href={path} className="transition hover:text-fg">{name}</Link>
+                  <Link href={path} className="inline-flex min-h-6 items-center transition hover:text-fg">{name}</Link>
                   <span aria-hidden className="text-dim">/</span>
                 </li>
               ))}
@@ -59,7 +59,7 @@ export const CardGrid = ({ items, today }: { items: Ev[]; today: string }) => (
 )
 
 /** A titled part of a list page. */
-export const Part = ({ id, title, lede, children }: { id: string; title: string; lede?: string; children: ReactNode }) => (
+export const Part = ({ id, title, lede, children }: { id: string; title: string; lede?: ReactNode; children: ReactNode }) => (
   <Section id={id} title={title} lede={lede}>{children}</Section>
 )
 

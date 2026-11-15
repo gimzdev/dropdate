@@ -14,7 +14,7 @@ const COLUMNS: [string, string[][]][] = [
   ['Calendar', [['This week', '/#week'], ['Most anticipated', '/#upcoming'], ['Releases by month', '/releases'], ['Esports by game', '/esports'], ['Search', '/#explore'], ['Browse every game', '/browse']]],
   ['Project', [['Source on GitHub', REPO], ['Terms and privacy', '/legal'], ['CC0 license', 'https://creativecommons.org/publicdomain/zero/1.0/']]],
 ]
-const credit = 'underline decoration-line/30 underline-offset-2 transition hover:text-fg'
+const credit = 'inline-block py-[3px] underline decoration-line/30 underline-offset-2 transition hover:text-fg' // 24 px tall at least, like every link
 
 export function Footer() {
   return (
@@ -29,7 +29,7 @@ export function Footer() {
           <nav key={title} aria-label={title}>
             <h2 className="text-[15px] font-semibold">{title}</h2>
             <ul className="mt-4 space-y-3 text-[15px] text-muted">
-              {links.map(([name, to]) => <li key={name}><A to={to} className="inline-flex items-center gap-1.5 transition hover:text-fg">{name}{to.startsWith('http') && <Icon name="external" className="h-3.5 w-3.5 opacity-60" />}</A></li>)}
+              {links.map(([name, to]) => <li key={name}><A to={to} className="inline-flex min-h-6 items-center gap-1.5 transition hover:text-fg">{name}{to.startsWith('http') && <Icon name="external" className="h-3.5 w-3.5 opacity-60" />}</A></li>)}
             </ul>
           </nav>
         ))}
@@ -48,7 +48,7 @@ export function Doc({ title, intro, toc, children }: { title: string; intro: str
     <>
       <Header />
       <main id="main" className="wrap pt-28 pb-20 md:pt-36 md:pb-28">
-        <Link href="/" className="inline-flex items-center gap-1.5 text-[15px] font-medium text-muted transition hover:text-fg"><Icon name="left" className="h-3.5 w-3.5" />Dropdate</Link>
+        <Link href="/" className="inline-flex min-h-6 items-center gap-1.5 text-[15px] font-medium text-muted transition hover:text-fg"><Icon name="left" className="h-3.5 w-3.5" />Dropdate</Link>
         <h1 className="display mt-6 text-[clamp(3rem,4vw+1.75rem,5.5rem)]">{title}</h1>
         <p className="mt-5 max-w-2xl text-lg text-muted">{intro}</p>
         <div className={`mt-14 md:mt-20 ${toc ? 'grid grid-cols-1 gap-12 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-16' : ''}`}>

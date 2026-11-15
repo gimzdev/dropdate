@@ -1,7 +1,7 @@
 // Checks the calendar feed and the date wording, with sample events and no network: npm test (Node 22.6 or newer, which reads lib/core.ts as it is).
 // The feed is read by Google, Apple and Outlook, so its rules are pinned here: RFC 5545 lines, escaping, stable UIDs, all-day dates.
 import assert from 'node:assert/strict'
-import { calTitle, genreName, googleUrl, ics, period, periodShort, srcSet, status } from '../lib/core.ts'
+import { asSpan, calTitle, genreName, googleUrl, ics, period, periodShort, precisionOf, srcSet, status } from '../lib/core.ts'
 
 const ev = (id, title, start, more = {}) => ({ id, title, kind: 'release', start, thumb: '', platforms: ['PC', 'PlayStation'], genres: ['Adventure', 'Shooter'], pop: 1, slug: `game-${id}`, ...more })
 const AT = '2026-11-14T12:34:56.789Z'
@@ -97,5 +97,15 @@ assert.equal(srcSet(undefined), undefined)
 
 // Genres: Steam's word leads to the calendar's one name (old feed links with ?genre=Simulation keep working)
 assert.deepEqual(['Simulation', 'RPG', 'Sports', 'Indie', 'constructor', '__proto__', ''].map(genreName), ['Simulator', 'Role-playing (RPG)', 'Sport', 'Indie', 'constructor', '__proto__', ''])
+
+// How exactly a date is known. IGDB documents these numbers for a release date's category: YYYYMMMMDD 0, YYYYMMMM 1, YYYY 2, YYYYQ1 to
+// YYYYQ4 3 to 6, TBD 7 (api-docs.igdb.com, read 2026-11-15). Past day and month, the date's own text ("Q4 2026", "2026") decides.
+const how = (date_format, human) => precisionOf({ date_format, human })
+assert.deepEqual([how(0, 'Nov 19, 2026'), how(1, 'Nov 2026'), how(2, '2026'), how(3, 'Q1 2027'), how(4, 'Q2 2027'), how(5, 'Q3 2027'), how(6, 'Q4 2027'), how(7, 'TBD')],
+  ['day', 'month', 'year', 'quarter', 'quarter', 'quarter', 'quarter', 'vague'])
+assert.deepEqual([how(4, '2027'), how(2, 'Q3 2027'), how(5, ''), how(2, ''), how(9, ''), how(9, '2031')], ['year', 'quarter', 'quarter', 'year', 'vague', 'year'], 'the text decides; without text, the documented number')
+assert.deepEqual([how(undefined, 'Nov 19, 2026'), how(undefined, 'Nov 2026'), how(undefined, 'Q4 2026'), how(undefined, '2026'), how(undefined, 'TBD'), precisionOf(undefined)],
+  ['day', 'month', 'quarter', 'year', 'vague', 'vague'], 'no number: the text alone')
+assert.deepEqual([asSpan('quarter'), asSpan('year'), asSpan('month'), asSpan(null), asSpan(undefined)], ['quarter', 'year', undefined, undefined, undefined])
 
 console.log('  calendar feed and dates: all checks passed')

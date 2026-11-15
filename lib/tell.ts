@@ -5,10 +5,10 @@
 // It holds nothing to sell: no store links, no prices.
 import 'server-only'
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { type Ev, SITE, gap, iso, longDate, monthLabel } from './core'
+import { type Ev, SITE, asSpan, gap, iso, longDate, period } from './core'
 import { fromSource, getEvents } from './data'
 import { canEmail, esc, hit, mailFrame, mailbox, q, secret, sendMail } from './db'
-import { LibraryError, saveGames } from './library'
+import { LibraryError, hasSpan, saveGames } from './library'
 
 /** Emails a day to everyone together: room for the sign-in codes within Resend's free plan (100 a day). */
 const TELL_PER_DAY = 50
@@ -41,8 +41,9 @@ export async function setTell(userId: string, key: string, on: boolean): Promise
     return false
   }
   await freshen(key)
+  const span = await hasSpan()
   const rows = await q(
-    `update dd_library l set tell_at = coalesce(l.tell_at, now()), told_on = g.starts_on, told_tba = g.tba, told_out = false
+    `update dd_library l set tell_at = coalesce(l.tell_at, now()), told_on = g.starts_on, told_tba = g.tba${span ? ', told_span = g.span' : ''}, told_out = false
      from dd_game g where l.user_id = $1 and l.game_key = $2 and g.key = l.game_key and l.wishlisted_at is not null
        and g.kind = 'release' and (g.starts_on is null or g.tba or g.starts_on > current_date)
      returning 1`, [userId, key])
@@ -52,18 +53,19 @@ export async function setTell(userId: string, key: string, on: boolean): Promise
 
 // ── The daily run ──
 
-interface Row { user_id: string; email: string; key: string; title: string; slug: string | null; starts_on: string | null; tba: boolean; told_on: string | null; told_tba: boolean }
+interface Row { user_id: string; email: string; key: string; title: string; slug: string | null; starts_on: string | null; tba: boolean; span: string | null; told_on: string | null; told_tba: boolean; told_span: string | null }
 interface Notice { row: Row; out: boolean }
 
-const when = (day: string | null, tba: boolean) => (!day ? 'no date' : tba ? monthLabel(day.slice(0, 7)) : longDate(day))
+/** A date as it is known: a day, or without one its month, quarter or year ("November 2026", "Q2 2027", "2027"). */
+const when = (day: string | null, tba: boolean, span?: string | null) => (!day ? 'no date' : tba ? period({ start: day, span: asSpan(span) }) : longDate(day))
 const gameUrl = (r: Row) => (r.slug ? `${SITE}/game/${r.slug}` : SITE)
 // "came out" when the email goes a day or two late (a run that could not send it on the day)
 const comes = (n: Notice, today: string) => `${n.row.title} ${n.row.starts_on! < today ? 'came' : 'comes'} out on ${when(n.row.starts_on, false)}`
-const line = (n: Notice, today: string) => (n.out ? `${comes(n, today)}.` : `${n.row.title} moved from ${when(n.row.told_on, n.row.told_tba)} to ${when(n.row.starts_on, n.row.tba)}.`)
+const line = (n: Notice, today: string) => (n.out ? `${comes(n, today)}.` : `${n.row.title} moved from ${when(n.row.told_on, n.row.told_tba, n.row.told_span)} to ${when(n.row.starts_on, n.row.tba, n.row.span)}.`)
 
 function email(userId: string, notices: Notice[], today: string) {
   const one = notices.length === 1 ? notices[0] : null
-  const subject = one ? (one.out ? comes(one, today) : `New date for ${one.row.title}: ${when(one.row.starts_on, one.row.tba)}`)
+  const subject = one ? (one.out ? comes(one, today) : `New date for ${one.row.title}: ${when(one.row.starts_on, one.row.tba, one.row.span)}`)
     : `${notices.length} games on your wishlist: release days and new dates`
   const contact = (process.env.PRIVACY_CONTACT || '').trim() || 'https://gimzdev.com/#contact'
   const why = 'You get this because you asked Dropdate to tell you about these games.'
@@ -91,15 +93,23 @@ export async function tellRun(deadline: number) {
   await saveGames(fresh)
 
   const rows = await q<Row>(
-    `select l.user_id, u.email, l.game_key as key, g.title, g.slug, to_char(g.starts_on, 'YYYY-MM-DD') as starts_on, g.tba, to_char(l.told_on, 'YYYY-MM-DD') as told_on, l.told_tba
+    `select l.user_id, u.email, l.game_key as key, g.title, g.slug, to_char(g.starts_on, 'YYYY-MM-DD') as starts_on, g.tba, to_jsonb(g)->>'span' as span,
+       to_char(l.told_on, 'YYYY-MM-DD') as told_on, l.told_tba, to_jsonb(l)->>'told_span' as told_span
      from dd_library l join dd_game g on g.key = l.game_key join "user" u on u.id = l.user_id
      where l.tell_at is not null and not l.told_out`)
-  const today = iso(new Date()), people = new Map<string, Notice[]>(), missed: Row[] = []
+  const span = await hasSpan() // db/008 and db/009: the quarter or year of a date without a month is kept (and read as null until then)
+  const today = iso(new Date()), people = new Map<string, Notice[]>(), missed: Row[] = [], quiet: Row[] = []
   for (const r of rows) {
     const out = !!r.starts_on && !r.tba && r.starts_on <= today
     if (out && gap(r.starts_on!, today) > 2) { missed.push(r); continue } // out days ago (the email could not go): too late to say so
-    if (out || r.starts_on !== r.told_on || r.tba !== r.told_tba) people.set(r.user_id, [...(people.get(r.user_id) ?? []), { row: r, out }])
+    const moved = r.starts_on !== r.told_on || r.tba !== r.told_tba
+    // The same day and "no day yet", but now known as a quarter or a year: news only for someone told a span before. Told before the
+    // column existed (no span on record), the same date is only named better now: noted, no email.
+    const named = !moved && (r.span ?? null) !== (r.told_span ?? null)
+    if (out || moved || (named && r.told_span)) people.set(r.user_id, [...(people.get(r.user_id) ?? []), { row: r, out }])
+    else if (named) quiet.push(r)
   }
+  if (span) for (const r of quiet) await q('update dd_library set told_span = $3 where user_id = $1 and game_key = $2', [r.user_id, r.key, asSpan(r.span) ?? null])
   for (const r of missed) await q('update dd_library set told_out = true where user_id = $1 and game_key = $2', [r.user_id, r.key])
 
   // Release days first, then the rest; each person once a day at most, everyone together TELL_PER_DAY
@@ -117,7 +127,8 @@ export async function tellRun(deadline: number) {
     }
     out.tellSent++
     for (const { row, out: released } of notices) {
-      await q('update dd_library set told_on = $3::date, told_tba = $4, told_out = told_out or $5 where user_id = $1 and game_key = $2', [userId, row.key, row.starts_on, row.tba, released])
+      if (span) await q('update dd_library set told_on = $3::date, told_tba = $4, told_span = $6, told_out = told_out or $5 where user_id = $1 and game_key = $2', [userId, row.key, row.starts_on, row.tba, released, asSpan(row.span) ?? null])
+      else await q('update dd_library set told_on = $3::date, told_tba = $4, told_out = told_out or $5 where user_id = $1 and game_key = $2', [userId, row.key, row.starts_on, row.tba, released])
     }
   }
   return out

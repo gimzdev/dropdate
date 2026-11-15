@@ -25,7 +25,7 @@ export function Resume({ next }: { next: string }) {
 }
 
 const field = 'h-12 w-full rounded-xl bg-black px-4 text-[17px] ring-1 ring-line/15 ring-inset transition placeholder:text-dim'
-const link = 'underline decoration-line/30 underline-offset-4 transition hover:text-fg hover:decoration-mark'
+const link = 'py-[3px] underline decoration-line/30 underline-offset-4 transition hover:text-fg hover:decoration-mark' // 24 px tall, the line stays as it is
 const ERRORS: Record<string, string> = {
   NETWORK: 'No connection. Check your internet and try again.', INVALID_OTP: 'That code is not right. Check it and try again.',
   OTP_EXPIRED: 'That code has expired. Ask for a new one.', TOO_MANY_ATTEMPTS: 'Too many wrong tries. Ask for a new code.', INVALID_EMAIL: 'That email address does not look right.',

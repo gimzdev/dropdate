@@ -2,7 +2,7 @@ import type { Metadata, ResolvingMetadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { About, Gallery, Rail, Trailer } from '@/components/game'
+import { About, Dates, Gallery, Rail, Trailer } from '@/components/game'
 import { Footer } from '@/components/site'
 import { SupportNote } from '@/components/support'
 import { BigDate, Countdown, FeedPanel, Header, Icon, Progress, SaveButton, TellButton } from '@/components/ui'
@@ -59,9 +59,9 @@ export default async function GamePage({ params }: Props) {
   const named = date && tba ? period({ start: date, span }) : '', gone = tba && !!date && date < today // gone: that month, quarter or year is over
   // Around the release day the visitor's own clock decides between the countdown, "Out today" and "Out now": this server's day is UTC, and the page is kept for hours
   const clocked = !!date && !tba && date >= shift(today, -1)
-  const similar = await getSimilar(g.id)
+  const similar = await getSimilar(g.id), dates = g.dates ?? [] // by region and platform, when they are not all the same day
   const facts = filled([
-    ['Release date', date ? (tba ? (gone ? named : `${named}, exact ${span ? 'date' : 'day'} not announced`) : longDate(date)) : 'Not announced yet'],
+    [dates.length ? 'First release' : 'Release date', date ? (tba ? (gone ? named : `${named}, exact ${span ? 'date' : 'day'} not announced`) : longDate(date)) : 'Not announced yet'],
     ['Platforms', g.platforms.join(', ')], ['Developer', g.developers.slice(0, 2).join(', ')], ['Publisher', g.publishers.slice(0, 2).join(', ')],
   ])
   const details = filled([
@@ -92,7 +92,7 @@ export default async function GamePage({ params }: Props) {
             <div className="absolute inset-0 bg-linear-to-t from-black via-black/30 to-black/10" />
           </div>
           <div className="wrap flex min-h-[min(88svh,860px)] flex-col pt-24 pb-10 md:pb-14">
-            <Link href="/#explore" className="inline-flex w-fit items-center gap-1.5 text-[15px] font-medium text-white/75 transition hover:text-white"><Icon name="left" className="h-3.5 w-3.5" />Calendar</Link>
+            <Link href="/#explore" className="inline-flex min-h-6 w-fit items-center gap-1.5 text-[15px] font-medium text-white/75 transition hover:text-white"><Icon name="left" className="h-3.5 w-3.5" />Calendar</Link>
             <div className="mt-auto pt-16">
               {date && !gone ? <BigDate date={date} tba={tba} span={span} size="text-[clamp(5rem,4vw+3.25rem,8.5rem)]" unknown={span ? 'Exact date not announced' : 'Exact day not announced'} label={facts[0][1]} />
                 : <p className="text-xl font-semibold">{gone ? `Released in ${named}` : 'Release date not announced yet'}</p>}
@@ -151,6 +151,9 @@ export default async function GamePage({ params }: Props) {
                 </ul>
                 {g.stores.some((s) => shop(s).sponsored) && <p className="mt-3 text-[13px] text-dim">Some of these links pay Dropdate a share of a sale, at no cost to you.</p>}
               </Panel>
+            )}
+            {dates.length > 0 && (
+              <Panel title="Release dates"><Dates dates={dates} /></Panel>
             )}
             <Panel title="Details">
               <dl className="-my-1 divide-y divide-line/10">

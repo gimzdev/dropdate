@@ -15,12 +15,17 @@ export interface Ev {
   tba?: boolean; span?: Span // tba: no day yet, `start` is the last day of its month; span: not even a month, `start` is the last day of that quarter or year
 }
 export type Span = 'quarter' | 'year'
+/** One release date of a game: where (IGDB's regions: "North America", "Worldwide"…), on what, and when (as exactly as it is known). */
+export interface Dated { start: string; tba?: boolean; span?: Span; regions: string[]; platforms: string[] }
+/** A span as stored or sent, checked: anything else is no span. */
+export const asSpan = (s: unknown): Span | undefined => (s === 'quarter' || s === 'year' ? s : undefined)
 /** A game found by name anywhere, calendar or not. undated: the source gives no date (the game may be out). */
 export interface Found { key: string; slug: string; title: string; released?: string; tba?: boolean; span?: Span; thumb: string; metacritic?: number; undated?: boolean }
 export interface Payload { events: Ev[]; today: string; updated: string; stale: boolean; error?: string; sources?: Record<string, number> }
 export interface Game {
   id: string; slug: string; name: string; description?: string; released?: string; website?: string; image?: string
   loose?: { start: string; span?: Span } // a first release known only by its month, quarter or year (`released` is an exact day)
+  dates?: Dated[] // every release date IGDB lists, by region and platform, when they are not all the same
   rating?: number; metacritic?: number; scoreFrom?: string; age?: string; playtime?: number
   trailer?: { preview?: string; src?: string; youtube?: string } // a video file (Steam) or a YouTube id (IGDB)
   genres: string[]; tags: string[]; platforms: string[]; developers: string[]; publishers: string[]; screenshots: string[]; stores: { name: string; url: string }[]
@@ -77,6 +82,26 @@ export function srcSet(u?: string) {
   if (u?.includes('/t_1080p/')) return `${u.replace('/t_1080p/', '/t_screenshot_big/')} 889w, ${u.replace('/t_1080p/', '/t_720p/')} 1280w, ${u} 1920w`
   if (u?.includes('/t_screenshot_big/')) return `${u.replace('/t_screenshot_big/', '/t_screenshot_med/')} 569w, ${u} 889w` // card artwork: 569 px is enough for most slots
   if (u?.includes('.1920x1080.')) return `${u.replace('.1920x1080.', '.600x338.')} 600w, ${u} 1920w`
+}
+
+// ── How exactly a release date is known ──
+
+export type Precision = 'day' | 'month' | 'quarter' | 'year' | 'vague'
+/**
+ * How exactly one release date is known. IGDB documents date_format as a reference to its Date Format list, and the numbers only for
+ * the older `category` it replaces: YYYYMMMMDD 0, YYYYMMMM 1, YYYY 2, YYYYQ1 to YYYYQ4 3 to 6, TBD 7 (api-docs.igdb.com, Release Date).
+ * 0 and 1 are read as they always were here (the calendar's days and months). Past them the date's own text decides, IGDB's `human`
+ * ("Q4 2026", "2026"): a quarter only when the text says so, or when there is no text and the number is one of the four; else a year.
+ */
+export function precisionOf(r?: { date_format?: number; human?: string }): Precision {
+  const f = r?.date_format, human = (r?.human ?? '').trim()
+  if (typeof f === 'number') {
+    if (f === 0) return 'day'
+    if (f === 1) return 'month'
+    if (/^q[1-4] [0-9]{4}$/i.test(human) || (!human && f >= 3 && f <= 6)) return 'quarter'
+    return /^[0-9]{4}$/.test(human) || f === 2 ? 'year' : 'vague'
+  }
+  return /^[a-z]{3,9}[.]? [0-9]{1,2}, [0-9]{4}$/i.test(human) ? 'day' : /^[a-z]{3,9}[.]? [0-9]{4}$/i.test(human) ? 'month' : /^q[1-4] [0-9]{4}$/i.test(human) ? 'quarter' : /^[0-9]{4}$/.test(human) ? 'year' : 'vague'
 }
 
 // ── Calendar export ──

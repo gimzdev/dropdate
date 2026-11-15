@@ -1,10 +1,10 @@
 import type { Metadata, ResolvingMetadata } from 'next'
 import { notFound } from 'next/navigation'
 import { cache } from 'react'
-import { Schedule } from '@/components/home'
+import { GameSchedule, Tally } from '@/components/home'
 import { FeedPanel } from '@/components/ui'
 import { ListPage, Part, Pills, type Listed, ldList } from '@/components/lists'
-import { type Ev, SITE, esportsPath, range, status } from '@/lib/core'
+import { type Ev, SITE, esportsPath, range } from '@/lib/core'
 import { esportsGames } from '@/lib/data'
 import { card } from '@/lib/meta'
 
@@ -28,21 +28,18 @@ export async function generateMetadata({ params }: Props, parent: ResolvingMetad
 export default async function EsportsGame({ params }: Props) {
   const { today, games } = await load(), slug = (await params).game, g = games.get(slug)
   if (!g) notFound()
-  const live = g.ahead.filter((e) => status(e, today).tone === 'live').length, title = `${g.name} esports schedule`, path = esportsPath(g.name)
-  const intro = g.ahead.length
-    ? `${g.ahead.length} ${g.name} ${g.ahead.length === 1 ? 'tournament is' : 'tournaments are'} live or coming up${live ? `, ${live} of them live now` : ''}. Dates and prize pools from PandaScore, checked every hour.`
-    : `No ${g.name} tournament is scheduled right now; the last ones are below. Dates and prize pools from PandaScore, checked every hour.`
+  const title = `${g.name} esports schedule`, path = esportsPath(g.name), all = [...g.ahead, ...g.ended]
+  // Live, ahead and ended are told apart in the browser, at the visitor's own day (this server's day is UTC, and the page is kept for an hour)
+  const intro = <Tally items={all} today={today} name={g.name} />
   return (
     <ListPage trail={[['Dropdate', '/'], ['Esports', '/esports'], [g.name, path]]} title={title} intro={intro} ld={ldList(title, path, g.ahead.map(listed))}>
-      <Schedule items={g.ahead} today={today} id="ahead" title="Live and coming up" lede={live ? `${live} live right now, then the rest by start date.` : 'By start date, with the prize pool where it is announced.'} />
-      {g.ahead.length > 0 && (
+      <GameSchedule items={all} today={today}>
         <div className="wrap pb-14 md:pb-20">
           <FeedPanel feed={`${SITE}/api/calendar.ics?type=tournament&genre=${encodeURIComponent(g.name)}`} title={<>Add {g.name} tournaments to your calendar</>} as="h2" className="">
             <p className="mt-1 max-w-xl text-[15px] text-muted">A live feed of the {g.name} tournaments in the calendar, live and coming up. When a date moves, your calendar follows.</p>
           </FeedPanel>
         </div>
-      )}
-      <Schedule items={g.ended.slice(0, 12)} today={today} id="ended" title="Ended recently" lede="The latest to finish." />
+      </GameSchedule>
       {games.size > 1 && (
         <Part id="games" title="Other games">
           <Pills label="Esports games" links={[...games.values()].filter((x) => x.name !== g.name).map((x) => [x.name, esportsPath(x.name)])} />

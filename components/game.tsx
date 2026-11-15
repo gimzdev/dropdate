@@ -1,10 +1,49 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { type Ev, type Game, srcSet } from '@/lib/core'
+import { type Dated, type Ev, type Game, period, range, srcSet } from '@/lib/core'
 import { Card, Icon, Section, useSwipe } from './ui'
 
 // The client side of a game page: the description, the trailer, the screenshot viewer and the rail of nearby releases.
+
+const REGION = 'dropdate:region'
+/**
+ * A game's release dates by region and platform, as IGDB lists them. The site does not know where a visitor is, so it shows them all;
+ * a visitor can say which region is theirs (kept in this browser only, for every game): its dates, and worldwide ones, then come first
+ * and are marked. The other lines stay as readable as before.
+ */
+export function Dates({ dates }: { dates: Dated[] }) {
+  const [mine, setMine] = useState('')
+  useEffect(() => { try { setMine(localStorage.getItem(REGION) ?? '') } catch { /* storage blocked: no region */ } }, [])
+  const regions = useMemo(() => [...new Set([...dates.flatMap((d) => d.regions), ...(mine ? [mine] : [])])].filter((r) => r !== 'Worldwide').sort(), [dates, mine])
+  const pick = (r: string) => { setMine(r); try { if (r) localStorage.setItem(REGION, r); else localStorage.removeItem(REGION) } catch { /* storage blocked: for this page only */ } }
+  const here = (d: Dated) => !!mine && (d.regions.includes(mine) || d.regions.includes('Worldwide'))
+  const rows = mine ? [...dates.filter(here), ...dates.filter((d) => !here(d))] : dates
+  return (
+    <>
+      <dl className="-my-1 divide-y divide-line/10">
+        {rows.map((d) => (
+          <div key={`${d.start}|${d.span ?? d.tba ?? ''}|${d.regions.join()}|${d.platforms.join()}`} className="py-3">
+            <dt className="text-[15px] font-semibold">{d.tba ? period(d) : range(d.start)}{here(d) && <span className="tag ml-2 bg-mark align-[2px] text-black">Your region</span>}</dt>
+            <dd className="mt-0.5 text-[14px] leading-snug text-muted">{[d.regions.join(', '), d.platforms.join(', ')].filter(Boolean).join(' · ')}</dd>
+          </div>
+        ))}
+      </dl>
+      {regions.length > 0 && (
+        <label className="mt-4 flex items-center justify-between gap-3 text-[14px] text-muted">Your region
+          <span className="relative">
+            <select value={mine} onChange={(e) => pick(e.target.value)} className="h-9 appearance-none rounded-full bg-transparent pr-8 pl-3.5 text-sm font-semibold text-fg ring-1 ring-line/15 transition ring-inset hover:ring-line/30">
+              <option value="" className="bg-panel text-fg">Not set</option>
+              {regions.map((r) => <option key={r} value={r} className="bg-panel text-fg">{r}</option>)}
+            </select>
+            <Icon name="down" className="pointer-events-none absolute top-1/2 right-3 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+          </span>
+        </label>
+      )}
+      <p className="mt-3 text-[13px] text-dim">By region and platform, as IGDB lists them. The calendar goes by the first release.{mine ? ' Your region is kept in this browser only.' : ''}</p>
+    </>
+  )
+}
 
 type Block = { t: 'lead' | 'p' | 'h' | 'ul'; text?: string; items?: string[] }
 const BULLET = /^\s*(?:[•·▪●◦*]|-\s)\s*/

@@ -123,12 +123,14 @@ function Day({ d, list, finals, today, onOpen }: { d: string; list: Ev[]; finals
   const [lead, ...rest] = shown, more = rest.slice(0, 3), extra = rest.length - more.length
   return ( // ruled like a wall calendar: the line sits in the gap, so every day gets the same width
     <li className="relative flex w-[220px] shrink-0 snap-start flex-col before:absolute before:inset-y-0 before:-left-4 before:w-px before:bg-line/10 first:before:hidden xl:w-auto">
-      <button type="button" onClick={onOpen} aria-label={`${label}, ${longDate(d)}: ${ending ? plural(finals.length, 'tournament final') : plural(list.length, 'event')}. Open it in the calendar`} className="mb-4 flex items-end gap-3 rounded-lg text-left">
+      {/* named by what it shows ("15 Today 1 drop"), then the full date for a screen reader: a spoken name that holds the words on screen (WCAG 2.5.3) */}
+      <button type="button" onClick={onOpen} className="mb-4 flex items-end gap-3 rounded-lg text-left">
         <span className="relative grid h-[58px] min-w-[50px] place-items-center">{isToday && <Circled className="-inset-x-3 -inset-y-2" />}<span className="display text-[52px] leading-none">{+d.slice(8)}</span></span>
         <span className="pb-1 leading-tight">
           <span className={`block text-[15px] font-semibold ${isToday ? 'text-mark' : ''}`}>{label}</span>
           <span className="block text-[13px] text-muted">{list.length ? plural(list.length, 'drop') : ending ? plural(finals.length, 'final') : monthShort(d)}</span>
         </span>
+        <span className="sr-only">: {longDate(d)}{list.length || ending ? '' : ', nothing starts'}. Open it in the calendar</span>
       </button>
       {lead ? (
         <Open e={lead} className="group relative block aspect-[16/10] overflow-hidden rounded-art bg-raised">
@@ -247,11 +249,35 @@ export function Fresh({ items, today: serverToday }: { items: Ev[]; today: strin
 }
 
 const COLS = 'md:grid-cols-[170px_minmax(0,1fr)_200px_130px]'
+const ends = (e: Ev) => e.end ?? e.start
+
+/** One esports game's tournaments, split at the visitor's own day: live or ahead by start date, then the latest to end. `children` go between the two tables. */
+export function GameSchedule({ items, today: serverToday, children }: { items: Ev[]; today: string; children?: ReactNode }) {
+  const today = useToday(serverToday)
+  const ahead = items.filter((e) => ends(e) >= today).sort((a, b) => a.start.localeCompare(b.start) || b.pop - a.pop)
+  const ended = items.filter((e) => ends(e) < today).sort((a, b) => ends(b).localeCompare(ends(a))).slice(0, 12)
+  const live = ahead.filter((e) => e.start <= today).length
+  return (
+    <>
+      <Schedule items={ahead} today={today} id="ahead" title="Live and coming up" lede={live ? `${live} live right now, then the rest by start date.` : 'By start date, with the prize pool where it is announced.'} />
+      {ahead.length > 0 && children}
+      <Schedule items={ended} today={today} id="ended" title="Ended recently" lede="The latest to finish." />
+    </>
+  )
+}
+/** A game's tournaments counted at the visitor's own day: the esports page's opening line (`name`), or the short count on the list of games. */
+export function Tally({ items, today: serverToday, name }: { items: Ev[]; today: string; name?: string }) {
+  const today = useToday(serverToday), ahead = items.filter((e) => ends(e) >= today), live = ahead.filter((e) => e.start <= today).length, next = ahead.length - live
+  if (name) return <>{ahead.length
+    ? `${ahead.length} ${name} ${ahead.length === 1 ? 'tournament is' : 'tournaments are'} live or coming up${live ? `, ${live} of them live now` : ''}. Dates and prize pools from PandaScore, checked every hour.`
+    : `No ${name} tournament is scheduled right now; the last ones are below. Dates and prize pools from PandaScore, checked every hour.`}</>
+  return <>{live > 0 && <span className="font-semibold text-live">{live} live · </span>}{next > 0 ? `${next} coming up` : live ? 'none coming up yet' : `${items.length - ahead.length} ended recently`}</>
+}
 const WHEN = { live: 'text-live', soon: 'text-mark', future: 'text-fg', past: 'text-dim' }
 
 /** Tournaments as a table. The home page shows the biggest; an esports page (app/esports) one game's, with its own title. */
-export function Schedule({ items, today: serverToday, id = 'esports', title = 'Esports', lede, className }: { items: Ev[]; today: string; id?: string; title?: string; lede?: string; className?: string }) {
-  const today = useToday(serverToday)
+export function Schedule({ items: all, today: serverToday, id = 'esports', title = 'Esports', lede, className, current }: { items: Ev[]; today: string; id?: string; title?: string; lede?: string; className?: string; current?: boolean }) {
+  const today = useToday(serverToday), items = current ? all.filter((e) => ends(e) >= today) : all // `current`: what ended before the visitor's own day leaves the table
   if (!items.length) return null
   const live = items.filter((e) => status(e, today).tone === 'live').length
   return (
@@ -398,7 +424,7 @@ export function Explorer({ data }: { data: Payload }) {
 
       <div className="mt-6 mb-8 flex flex-wrap items-center gap-x-5 gap-y-3">
         <p aria-live="polite" className="text-[15px] text-muted"><span className="font-semibold text-fg">{list.length.toLocaleString('en-US')}</span> {list.length === 1 ? 'result' : 'results'}{view === 'calendar' ? ` in ${monthLabel(month)}` : ''}</p>
-        {filtered && <button type="button" onClick={reset} className="text-[15px] font-semibold underline decoration-line/30 underline-offset-4 transition hover:decoration-mark">Clear filters</button>}
+        {filtered && <button type="button" onClick={reset} className="min-h-6 text-[15px] font-semibold underline decoration-line/30 underline-offset-4 transition hover:decoration-mark">Clear filters</button>}
         {view === 'grid' && <span className="ml-auto"><Select label="Sort by" value={sort} onChange={setSort} options={Object.entries(SORTS)} /></span>}
       </div>
 

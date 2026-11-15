@@ -16,7 +16,7 @@ type Props = { searchParams: Promise<Record<string, string | string[] | undefine
 
 const GRID = 'grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2 sm:gap-y-9 lg:grid-cols-3 xl:grid-cols-4'
 const box = 'rounded-panel border border-dashed border-line/12 px-6 py-16 text-center'
-const link = 'font-semibold underline decoration-line/30 underline-offset-4 transition hover:decoration-mark'
+const link = 'inline-block py-px font-semibold underline decoration-line/30 underline-offset-4 transition hover:decoration-mark'
 const PROBLEMS = {
   busy: ['Browsing is resting for today', 'To keep the game database from being overloaded, only so many new pages are looked up each day, and today’s are used. Pages seen before still open, and the search on the home page keeps working. Try again tomorrow.'],
   down: ['The games did not load', 'The game database is not answering right now. Try again in a minute.'],
@@ -50,7 +50,7 @@ export default async function Browse({ searchParams }: Props) {
     <>
       <Header />
       <main id="main" className="wrap pt-28 pb-20 md:pt-36 md:pb-28">
-        <Link href="/" className="inline-flex items-center gap-1.5 text-[15px] font-medium text-muted transition hover:text-fg"><Icon name="left" className="h-3.5 w-3.5" />Dropdate</Link>
+        <Link href="/" className="inline-flex min-h-6 items-center gap-1.5 text-[15px] font-medium text-muted transition hover:text-fg"><Icon name="left" className="h-3.5 w-3.5" />Dropdate</Link>
         <h1 className="display mt-6 text-[clamp(3rem,4vw+1.75rem,5.5rem)]">Browse every game</h1>
         <p className="mt-5 max-w-2xl text-lg text-muted">Hundreds of thousands of games, from the first arcade cabinets to what comes out next year. Pick a year, a platform or a genre, or search by name.</p>
         <BrowseShell query={query} thisYear={+today.slice(0, 4)}>

@@ -25,7 +25,7 @@ export function SupportNote({ children, className = '', small = false }: { child
         <span className="mt-[3px] shrink-0 text-mark"><Heart on className="h-4 w-4" /></span>
         <p className="min-w-0 flex-1 leading-relaxed text-pretty">
           {children}{' '}
-          <a href={PATREON} target="_blank" rel="noopener noreferrer" className="font-semibold whitespace-nowrap text-fg underline decoration-mark/50 underline-offset-4 transition hover:decoration-mark">Support on Patreon</a>
+          <a href={PATREON} target="_blank" rel="noopener noreferrer" className="inline-block py-0.5 font-semibold whitespace-nowrap text-fg underline decoration-mark/50 underline-offset-4 transition hover:decoration-mark">Support on Patreon</a>
         </p>
         <button type="button" onClick={hide} title="Not now" aria-label="Hide this note" className="-mt-1 -mr-1.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-dim transition hover:bg-raised hover:text-fg"><Icon name="close" className="h-3.5 w-3.5" /></button>
       </aside>

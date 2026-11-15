@@ -2,7 +2,7 @@
 // details (dd_game), so a library opens without asking the sources for every game.
 import 'server-only'
 import { after } from 'next/server'
-import { type Ev, type Flags, GAME_KEY, type LibItem, type ListName, PLATFORMS, type Platform } from './core'
+import { type Ev, type Flags, GAME_KEY, type LibItem, type ListName, PLATFORMS, type Platform, asSpan } from './core'
 import { fromSource, getEvents } from './data'
 import { allow, hashKey, mailbox, q, tx } from './db'
 
@@ -19,10 +19,28 @@ const unavailable = () => new LibraryError(502, 'The game data did not load. Try
 
 interface GameRow {
   key: string; kind: 'release' | 'tournament'; title: string; slug: string | null; url: string | null; thumb: string
-  starts_on: string | null; ends_on: string | null; tba: boolean; platforms: string[]; genres: string[]; metacritic: number | null; prize: string | null
+  starts_on: string | null; ends_on: string | null; tba: boolean; span: string | null; platforms: string[]; genres: string[]; metacritic: number | null; prize: string | null
 }
 type Dated = GameRow & { w: Date | null; p: Date | null; c: Date | null }
-const GAME = `g.key, g.kind, g.title, g.slug, g.url, g.thumb, to_char(g.starts_on, 'YYYY-MM-DD') as starts_on, to_char(g.ends_on, 'YYYY-MM-DD') as ends_on, g.tba, g.platforms, g.genres, g.metacritic, g.prize`
+const GAME = `g.key, g.kind, g.title, g.slug, g.url, g.thumb, to_char(g.starts_on, 'YYYY-MM-DD') as starts_on, to_char(g.ends_on, 'YYYY-MM-DD') as ends_on, g.tba, to_jsonb(g)->>'span' as span, g.platforms, g.genres, g.metacritic, g.prize`
+// (span through to_jsonb: the row reads the same before db/008 has added the column, as null)
+
+let spanReady = false, spanAsked = 0
+/**
+ * Whether db/008 and db/009 have run (dd_game.span and dd_library.told_span exist). Until both have, nothing is written to them: a date known by
+ * its quarter or year is then kept as before (the last day of it, tba). Asked again a minute later while the answer is no.
+ */
+export async function hasSpan(): Promise<boolean> {
+  if (spanReady || Date.now() - spanAsked < 60_000) return spanReady
+  spanAsked = Date.now()
+  try {
+    const [r] = await q<{ n: number }>(
+      `select count(*)::int as n from information_schema.columns where table_schema = current_schema()
+       and ((table_name = 'dd_game' and column_name = 'span') or (table_name = 'dd_library' and column_name = 'told_span'))`)
+    spanReady = r?.n === 2
+  } catch { spanReady = false }
+  return spanReady
+}
 const DATES = 'l.wishlisted_at as w, l.played_at as p, l.completed_at as c'
 /** Snapshots refresh daily while their date or score can move (upcoming, recent, undated), every two weeks once settled. */
 const STALE = `g.refreshed_at < now() - (case when g.starts_on is null or g.starts_on > current_date - 60 then interval '1 day' else interval '14 days' end)`
@@ -31,25 +49,27 @@ const web = (u?: string) => (u && /^https?:\/\//.test(u) ? u : null)
 const day = (s?: string) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null)
 const toRow = (e: Ev): GameRow => ({
   key: e.id, kind: e.kind, title: e.title.slice(0, 300), slug: e.slug && /^[a-z0-9-]{1,200}$/i.test(e.slug) ? e.slug : null, url: web(e.url), thumb: web(e.thumb) ?? '',
-  starts_on: day(e.start), ends_on: day(e.end), tba: !!e.tba, platforms: e.platforms, genres: e.genres.slice(0, 12),
+  starts_on: day(e.start), ends_on: day(e.end), tba: !!e.tba, span: (e.tba && asSpan(e.span)) || null, platforms: e.platforms, genres: e.genres.slice(0, 12),
   metacritic: Number.isInteger(e.metacritic) && e.metacritic! >= 0 && e.metacritic! <= 100 ? e.metacritic! : null, prize: e.prize?.slice(0, 40) ?? null,
 })
 const toEv = (r: GameRow): Ev => ({
   id: r.key, title: r.title, kind: r.kind, start: r.starts_on ?? '', thumb: r.thumb, pop: 0,
   platforms: r.platforms.filter((p): p is Platform => (PLATFORMS as readonly string[]).includes(p)), genres: r.genres,
-  ...(r.ends_on && r.ends_on !== r.starts_on && { end: r.ends_on }), ...(r.tba && { tba: true }), ...(r.slug && { slug: r.slug }), ...(r.url && { url: r.url }),
+  ...(r.ends_on && r.ends_on !== r.starts_on && { end: r.ends_on }), ...(r.tba && { tba: true }), ...(r.tba && asSpan(r.span) && { span: asSpan(r.span) }), ...(r.slug && { slug: r.slug }), ...(r.url && { url: r.url }),
   ...(r.metacritic !== null && { metacritic: r.metacritic }), ...(r.prize && { prize: r.prize }),
 })
 
 export async function saveGames(evs: Ev[]) {
   const rows = [...new Map(evs.filter((e) => GAME_KEY.test(e.id)).map((e) => [e.id, toRow(e)])).values()]
-  if (rows.length) await q(
-    `insert into dd_game (key, kind, title, slug, url, thumb, starts_on, ends_on, tba, platforms, genres, metacritic, prize, refreshed_at)
-     select x.key, x.kind, x.title, x.slug, x.url, x.thumb, x.starts_on, x.ends_on, x.tba, x.platforms, x.genres, x.metacritic, x.prize, now()
-     from jsonb_to_recordset($1::jsonb) as x(key text, kind text, title text, slug text, url text, thumb text, starts_on date, ends_on date, tba boolean, platforms text[], genres text[], metacritic smallint, prize text)
+  if (!rows.length) return
+  const span = await hasSpan(), col = (s: string) => (span ? s : '') // the span column, once db/008 has added it
+  await q(
+    `insert into dd_game (key, kind, title, slug, url, thumb, starts_on, ends_on, tba, platforms, genres, metacritic, prize${col(', span')}, refreshed_at)
+     select x.key, x.kind, x.title, x.slug, x.url, x.thumb, x.starts_on, x.ends_on, x.tba, x.platforms, x.genres, x.metacritic, x.prize${col(', x.span')}, now()
+     from jsonb_to_recordset($1::jsonb) as x(key text, kind text, title text, slug text, url text, thumb text, starts_on date, ends_on date, tba boolean, platforms text[], genres text[], metacritic smallint, prize text${col(', span text')})
      on conflict (key) do update set kind = excluded.kind, title = excluded.title, slug = excluded.slug, url = excluded.url, thumb = coalesce(nullif(excluded.thumb, ''), dd_game.thumb),
        starts_on = excluded.starts_on, ends_on = excluded.ends_on, tba = excluded.tba, platforms = excluded.platforms, genres = excluded.genres,
-       metacritic = coalesce(excluded.metacritic, dd_game.metacritic), prize = coalesce(excluded.prize, dd_game.prize), refreshed_at = now()`,
+       metacritic = coalesce(excluded.metacritic, dd_game.metacritic), prize = coalesce(excluded.prize, dd_game.prize)${col(', span = excluded.span')}, refreshed_at = now()`,
     [JSON.stringify(rows)],
   )
 }
@@ -199,6 +219,10 @@ export async function merge(userId: string, keys: unknown): Promise<{ added: num
 }
 
 
+/** A stored date as exactly as it is known: a day (2026-11-19), a month (2026-11), a quarter (2027-Q2) or a year (2027). */
+const known = (r: GameRow) => (!r.starts_on ? null : !r.tba ? r.starts_on : asSpan(r.span) === 'year' ? r.starts_on.slice(0, 4)
+  : asSpan(r.span) === 'quarter' ? `${r.starts_on.slice(0, 4)}-Q${Math.ceil(+r.starts_on.slice(5, 7) / 3)}` : r.starts_on.slice(0, 7))
+
 export async function exportData(user: { id: string; email: string; since: string }) {
   const [accounts, sessions, rows, [who]] = await Promise.all([
     q<{ providerId: string; accountId: string; createdAt: Date }>('select "providerId", "accountId", "createdAt" from "account" where "userId" = $1 order by "createdAt"', [user.id]),
@@ -208,7 +232,7 @@ export async function exportData(user: { id: string; email: string; since: strin
   ])
   const providers = accounts.filter((a) => a.providerId !== 'credential')
   const list = (f: 'w' | 'p') => rows.filter((r) => r[f]).sort((a, b) => +b[f]! - +a[f]!).map((r) => ({
-    id: r.key, title: r.title, type: r.kind, releaseDate: r.starts_on, metacritic: r.metacritic, addedAt: r[f]!.toISOString(), ...(f === 'p' && { completedAt: r.c?.toISOString() ?? null }),
+    id: r.key, title: r.title, type: r.kind, releaseDate: known(r), metacritic: r.metacritic, addedAt: r[f]!.toISOString(), ...(f === 'p' && { completedAt: r.c?.toISOString() ?? null }),
     ...(f === 'w' && { releaseEmailsAskedAt: r.t?.toISOString() ?? null }),
   }))
   return {

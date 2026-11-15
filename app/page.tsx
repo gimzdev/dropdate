@@ -39,7 +39,7 @@ export default async function Home() {
         {lead && ranked.length >= 2 ? <Upcoming items={[art(lead), ...ranked]} today={today} /> : <span id="upcoming" />}
         <Fresh items={fresh} today={today} />
         <SupportNote className="wrap pb-14 md:pb-20">Dropdate is <span className="relative mx-1.5 inline-block font-semibold text-fg">free<Circled className="-inset-x-2 -inset-y-1.5" /></span> for everyone, with no ads, no tracking cookies and no paywall. One developer builds it, and supporters keep it running.</SupportNote>
-        {cups.length ? <Schedule items={cups} today={today} /> : <span id="esports" />}
+        {cups.length ? <Schedule items={cups} today={today} current /> : <span id="esports" />}
         <Explorer data={{ ...data, events }} />
       </main>
       <Footer />

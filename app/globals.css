@@ -87,7 +87,7 @@
   .code-inline { @apply rounded-md bg-raised px-1.5 py-0.5 font-mono text-[0.86em] text-fg; }
   .prose-dd { @apply space-y-4 text-[16px] leading-relaxed text-muted; }
   .prose-dd strong { @apply font-semibold text-fg; }
-  .prose-dd a { @apply text-fg underline decoration-line/30 underline-offset-4 transition hover:decoration-mark; }
+  .prose-dd a { @apply py-px text-fg underline decoration-line/30 underline-offset-4 transition hover:decoration-mark; } /* py: 24 px tall, the line stays as it is */
   /* A sideways row running to both screen edges, its first item lined up with the page (snap offsets match .wrap per breakpoint) */
   .bleed { margin-inline: calc(50% - 50vw); padding-inline: calc(50vw - 50%); scroll-padding-inline: 1rem; }
   @media (min-width: 40rem) { .bleed { scroll-padding-inline: 1.5rem; } }

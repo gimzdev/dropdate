@@ -1,5 +1,6 @@
 import type { Metadata, ResolvingMetadata } from 'next'
 import Link from 'next/link'
+import { Tally } from '@/components/home'
 import { ListPage, Part, ldList } from '@/components/lists'
 import { SITE, esportsPath, status } from '@/lib/core'
 import { esportsGames } from '@/lib/data'
@@ -26,10 +27,7 @@ export default async function Esports() {
               <li key={g.slug}>
                 <Link href={esportsPath(g.name)} className="group block rounded-panel bg-panel px-5 py-4 transition hover:bg-raised">
                   <span className="block text-[17px] font-semibold decoration-line/40 underline-offset-[3px] group-hover:underline">{g.name}</span>
-                  <span className="mt-1 block text-[14px] text-muted">
-                    {g.live > 0 && <span className="font-semibold text-live">{g.live} live · </span>}
-                    {g.ahead.length - g.live > 0 ? `${g.ahead.length - g.live} coming up` : g.live ? 'none coming up yet' : `${g.ended.length} ended recently`}
-                  </span>
+                  <span className="mt-1 block text-[14px] text-muted"><Tally items={[...g.ahead, ...g.ended]} today={today} /></span>
                 </Link>
               </li>
             ))}

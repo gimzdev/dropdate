@@ -2,7 +2,7 @@
 // scores, trailers and long descriptions; PandaScore adds esports. Each source fails soft: whatever answers is shown.
 import { unstable_cache } from 'next/cache'
 import { cache } from 'react'
-import { type BrowseQuery, type Ev, type Found, type Game, type Payload, type Platform, type Span, BROWSE_PAGE, BROWSE_PAGES, expandQuery, gameSlug, genreName, iso, lite, shift } from './core'
+import { type BrowseQuery, type Dated, type Ev, type Found, type Game, type Payload, type Platform, type Precision, type Span, BROWSE_PAGE, BROWSE_PAGES, expandQuery, gameSlug, genreName, iso, lite, precisionOf, shift } from './core'
 import { allow, hasDb, q } from './db'
 
 const env = process.env
@@ -122,12 +122,7 @@ const igdbScore = (g: IgdbGame) => ((g.aggregated_rating_count ?? 0) >= 3 && g.a
 const igdbPlayers = (g: IgdbGame) => ((g.rating_count ?? 0) >= 5 && g.rating ? Math.round(g.rating / 2) / 10 : undefined)
 
 /** How exactly the first release date is known: a day, a month, a quarter, a year, or not at all (TBD, or IGDB does not say). */
-function precision(g: IgdbGame): 'day' | 'month' | 'quarter' | 'year' | 'vague' {
-  const r = g.release_dates?.find((x) => x.date === g.first_release_date), f = r?.date_format
-  if (typeof f === 'number') return f === 0 ? 'day' : f === 1 ? 'month' : f === 2 ? 'year' : f >= 3 && f <= 6 ? 'quarter' : 'vague'
-  const human = r?.human ?? ''
-  return /^[a-z]{3,9}[.]? [0-9]{1,2}, [0-9]{4}$/i.test(human) ? 'day' : /^[a-z]{3,9}[.]? [0-9]{4}$/i.test(human) ? 'month' : /^q[1-4] [0-9]{4}$/i.test(human) ? 'quarter' : /^[0-9]{4}$/.test(human) ? 'year' : 'vague'
-}
+const precision = (g: IgdbGame): Precision => precisionOf(g.release_dates?.find((x) => x.date === g.first_release_date))
 /**
  * A day, or a month (tba). The calendar leaves a quarter, a year and "TBD" off; `any` keeps them (tba, with the span the date stands for:
  * a quarter, or a year when nothing finer is certain) and games with no date at all (start '').
@@ -192,6 +187,35 @@ async function igdbExtras(id: number) {
   return { age: all.find((a) => /^esrb/i.test(a)) ?? all.find((a) => /^pegi/i.test(a)) ?? all[0], playtime: hours > 0 ? hours : undefined }
 }
 
+interface IgdbRelease { date?: number; human?: string; date_format?: number; platform?: { name?: string }; release_region?: { region?: string } }
+/** "north_america" as "North America": IGDB's region names read as words. */
+const regionName = (s = '') => s.replace(/_/g, ' ').trim().replace(/(^| )[a-z]/g, (c) => c.toUpperCase())
+/**
+ * Every release date IGDB lists for a game (its Release Date list: date, platform, release_region), grouped: the regions that share
+ * a date on the same platforms are one line. Only when the dates differ; undefined when they do not, or when IGDB refuses the
+ * question (it is optional, like the playtime: a refusal never costs the page).
+ */
+async function igdbDates(id: number): Promise<Dated[] | undefined> {
+  const rows = await igdb<IgdbRelease[]>(`fields date,human,date_format,platform.name,release_region.region; where game = ${id} & date != null; limit 200;`, 3 * DAY, 'release_dates')
+  const per = new Map<string, { when: Omit<Dated, 'regions' | 'platforms'>; region: string; platforms: Set<string> }>() // one date in one region
+  for (const r of rows ?? []) {
+    if (!r.date) continue
+    const start = new Date(r.date * 1000).toISOString().slice(0, 10), p = precisionOf(r), region = regionName(r.release_region?.region)
+    const when = p === 'day' ? { start } : p === 'month' ? { start, tba: true } : { start, tba: true, span: (p === 'quarter' ? 'quarter' : 'year') as Span }
+    const key = `${start}|${p}|${region}`, line = per.get(key) ?? { when, region, platforms: new Set<string>() }
+    if (r.platform?.name) line.platforms.add(r.platform.name)
+    per.set(key, line)
+  }
+  if (new Set([...per.values()].map((l) => `${l.when.start}|${l.when.tba}|${l.when.span}`)).size < 2) return undefined // one date for everyone: the page already shows it
+  const out = new Map<string, Dated>() // regions with the same date on the same platforms share a line
+  for (const l of per.values()) {
+    const platforms = [...l.platforms].sort(), key = `${l.when.start}|${l.when.tba}|${l.when.span}|${platforms.join('|')}`, line = out.get(key) ?? { ...l.when, regions: [], platforms }
+    if (l.region && !line.regions.includes(l.region)) line.regions.push(l.region)
+    out.set(key, line)
+  }
+  return [...out.values()].sort((a, b) => a.start.localeCompare(b.start) || a.regions.join().localeCompare(b.regions.join())).slice(0, 24)
+}
+
 /** A game page, by IGDB id or slug; Steam, when the game is on it, adds the score, the long description and a video file. */
 async function igdbGame(where: string): Promise<Game | null> {
   if (!igdbOn()) return null
@@ -200,7 +224,7 @@ async function igdbGame(where: string): Promise<Game | null> {
   const g = rows[0]
   if (!g) return null
   const urls = (g.websites ?? []).map((w) => w.url), appid = steamAppOf(urls)
-  const [a, more] = await Promise.all([appid && steamOn() ? steamApp(appid) : null, igdbExtras(g.id)])
+  const [a, more, dates] = await Promise.all([appid && steamOn() ? steamApp(appid) : null, igdbExtras(g.id), igdbDates(g.id).catch(() => undefined)])
   const name = clean(g.name), when = igdbWhen(g, true), pics = [...(g.screenshots ?? []), ...(g.artworks ?? [])].map((x) => igImg(x.image_id, '1080p'))
   const people = (k: 'developer' | 'publisher') => (g.involved_companies ?? []).filter((c) => c[k] && c.company).map((c) => c.company!.name)
   const critics = igdbScore(g), steamScore = a?.metacritic?.score || undefined, own = [g.summary, g.storyline].filter(Boolean).join('\n\n'), long = a ? htmlText(a.about_the_game) : ''
@@ -211,7 +235,7 @@ async function igdbGame(where: string): Promise<Game | null> {
     id: `igdb-${g.id}`, slug: g.slug || kebab(`igdb ${g.id} ${name}`), name, description: (long.length > own.length ? long : own) || a?.short_description || undefined,
     released: when?.exact ? when.start : undefined, loose: when && !when.exact && when.start ? { start: when.start, span: when.span } : undefined, website: urls.find((u) => !SOCIAL.test(u) && !SHOPS.some(([re]) => re.test(u))) ?? (a?.website || undefined),
     image: pics[0] ?? (g.cover ? igImg(g.cover.image_id, '1080p') : undefined), rating: igdbPlayers(g), metacritic: steamScore ?? critics, scoreFrom: !steamScore && critics ? 'IGDB critics' : undefined,
-    age: more.age, playtime: more.playtime, trailer: clip ?? (video ? { youtube: video.video_id } : undefined),
+    age: more.age, playtime: more.playtime, dates, trailer: clip ?? (video ? { youtube: video.video_id } : undefined),
     genres: (g.genres ?? []).map((x) => x.name), tags: (g.themes ?? []).map((x) => x.name), platforms: (g.platforms ?? []).map((x) => x.name),
     developers: people('developer').length ? people('developer') : (a?.developers ?? []), publishers: people('publisher').length ? people('publisher') : (a?.publishers ?? []),
     screenshots: shots.slice(0, 8), stores: !appid || shops.some((s) => s.name === 'Steam') ? shops : [...shops, { name: 'Steam', url: `https://store.steampowered.com/app/${appid}` }],
@@ -237,20 +261,35 @@ function relevance(title: string, variants: string[]) {
   return best
 }
 
+/**
+ * The best-known games whose name holds these words, as an IGDB query. IGDB's search orders by likeness to the words alone
+ * ("results are sorted by similarity to the given search string"), so for a series name ("pokemon") the fan games it lists first
+ * hide the games people mean. This asks for the ones people rated or follow, most rated first. The words are matched in `slug`
+ * ("a url-safe, unique, lower-case version of the name": no accents, so pokemon finds Pokémon) with the documented
+ * case-insensitive infix filter, ~ *"…"*. An unrated game that people follow has no count and IGDB lists it first.
+ */
+const wellKnown = (name: string, where: string, limit: number) => { // '' for a name too short to look inside slugs for
+  const words = kebab(name).slice(0, 80)
+  return words.length < 3 ? '' : `fields ${IG_FIELDS}; where slug ~ *"${words}"* & (hypes > 0 | total_rating_count > 0) & ${where}; sort total_rating_count desc; limit ${limit};`
+}
+/** How known a game is, 0 to 30: the people who follow it before release and the ratings it has, on a log scale. */
+const renown = (g: IgdbGame) => Math.min(30, Math.log10(1 + (g.hypes ?? 0) * 10 + (g.total_rating_count ?? 0) * 5) * 8)
+
 export async function searchGames(q: string): Promise<Found[]> {
   const term = q.replace(/\s+/g, ' ').trim().slice(0, 80)
   if (term.length < 2) return []
   const variants = expandQuery(term).slice(0, 2), enc = encodeURIComponent
   // "gta" is asked as typed and as "grand theft auto": the series first, so its main games come first
-  const [shops, igs] = await Promise.all([
+  const [shops, igs, known] = await Promise.all([
     Promise.all(variants.map((v) => (steamOn() ? get<{ items?: { id: number; name: string; type?: string; metascore?: string }[] }>(`${STEAM}/api/storesearch/?term=${enc(v)}&l=english&cc=us`) : undefined))),
     Promise.all(variants.map((v, i) => igdb(`search "${igq(v)}"; fields ${IG_FIELDS}; where ${CATALOG}; limit ${i ? 30 : 15};`, 12 * HOUR))),
+    ((ask) => (ask ? igdb(ask, 12 * HOUR) : undefined))(wellKnown(variants[variants.length - 1], CATALOG, 40)),
   ])
   const found = new Map<string, { f: Found; rel: number; score: number }>(), seen = new Set<string>()
   const add = (id: string, title: string, rel: number, pop: number, { slug, ...f }: Omit<Found, 'key' | 'title'>) => { seen.add(same(title)); found.set(id, { rel, score: rel + pop, f: { key: id, slug, title, ...f } }) }
-  for (const g of igs.flatMap((r) => r ?? [])) {
+  for (const g of [...igs.flatMap((r) => r ?? []), ...(known ?? [])]) {
     const title = clean(g.name), id = `igdb-${g.id}`, pic = g.screenshots?.[0]?.image_id ?? g.artworks?.[0]?.image_id, cover = g.cover?.image_id, when = igdbWhen(g, true)
-    if (!found.has(id)) add(id, title, relevance(title, variants), Math.min(30, Math.log10(1 + (g.hypes ?? 0) * 10 + (g.total_rating_count ?? 0) * 5) * 8),
+    if (!found.has(id)) add(id, title, relevance(title, variants), renown(g),
       { slug: g.slug || kebab(`igdb ${g.id} ${title}`), released: when?.start || undefined, tba: (when?.start && when.tba) || undefined, span: when?.span, thumb: pic ? igImg(pic, 'screenshot_big') : cover ? igImg(cover, 'cover_big') : '', metacritic: igdbScore(g) })
   }
   // Steam search gives no date: those are "undated" (they may well be out)
@@ -304,10 +343,19 @@ const browsed = (revalidate: number) => unstable_cache(async (key: string): Prom
   if (!(await allow('browse:igdb', BROWSE_PER_DAY, 86400))) throw new BrowseError('busy')
   const where = browseWhere(q, today), show = (rows: IgdbGame[]) => rows.flatMap((g) => igdbEv(g, 'browse') ?? []).map(lite)
   const term = q.q && (expandQuery(q.q)[1] ?? q.q) // "gta" browses Grand Theft Auto
-  if (term) { // a name: the best 500 by relevance, paged here
-    const rows = await igdbPost<IgdbGame[]>('games', `search "${igq(term)}"; fields ${IG_FIELDS}; where ${where}; limit 500;`)
+  if (term) { // a name: IGDB's 500 closest matches and the series' best-known games, in the order asked for, paged here
+    const [rows, known] = await Promise.all([
+      igdbPost<IgdbGame[]>('games', `search "${igq(term)}"; fields ${IG_FIELDS}; where ${where}; limit 500;`),
+      ((ask) => (ask ? igdbPost<IgdbGame[]>('games', ask) : undefined))(wellKnown(term, where, 100)),
+    ])
     if (!rows) throw new BrowseError('down') // never kept: the next visit asks again
-    const items = show(rows)
+    const all = [...new Map([...(known ?? []), ...rows].map((g) => [g.id, g])).values()], rank = new Map(all.map((g) => [`igdb-${g.id}`, relevance(clean(g.name), [term]) + renown(g)]))
+    const by: Record<BrowseQuery['sort'], (a: Ev, b: Ev) => number> = {
+      popular: (a, b) => (rank.get(b.id) ?? 0) - (rank.get(a.id) ?? 0), // the name itself, then names starting with it, each by how known the game is
+      score: (a, b) => (b.metacritic ?? -1) - (a.metacritic ?? -1), newest: (a, b) => b.start.localeCompare(a.start), oldest: (a, b) => a.start.localeCompare(b.start),
+      name: (a, b) => a.title.localeCompare(b.title),
+    }
+    const items = show(all).sort(by[q.sort])
     return { count: items.length, items: items.slice((q.page - 1) * BROWSE_PAGE, q.page * BROWSE_PAGE) }
   }
   const [rows, total] = await Promise.all([
@@ -592,5 +640,6 @@ export async function esportsGames() {
     g.ahead.sort(byDate)
     g.ended.sort((a, b) => (b.end ?? b.start).localeCompare(a.end ?? a.start))
   }
+  // (ahead and ended are split at this server's day, UTC: the pages split them again at the visitor's own day)
   return { today, updated: data.updated, games }
 }

@@ -53,7 +53,7 @@ export function Pager({ query, pages }: { query: BrowseQuery; pages: number }) {
     const inner = rel === 'prev' ? <><Icon name="left" />{label}</> : <>{label}<Icon name="right" /></>
     return on
       ? <Link href={browseHref({ ...query, page: to })} prefetch={false} scroll={false} onClick={jump} rel={rel} className="btn btn-line">{inner}</Link>
-      : <span aria-hidden className="btn btn-line pointer-events-none opacity-40">{inner}</span>
+      : <button type="button" disabled className="btn btn-line">{inner}</button> // no page that way: a disabled button (dimmed by .btn), not hidden text
   }
   return (
     <nav aria-label="Pages" className="mt-12 flex items-center justify-center gap-3">
