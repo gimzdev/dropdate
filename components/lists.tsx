@@ -7,7 +7,7 @@ import { Card, Header, Icon, Section } from './ui'
 // The pages people search for (app/releases, app/esports): where the page sits, its heading, one opening line, the list, and
 // the same list for search engines (ItemList and BreadcrumbList).
 
-const GRID = 'grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2 sm:gap-y-9 lg:grid-cols-3 xl:grid-cols-4'
+export const GRID = 'grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2 sm:gap-y-9 lg:grid-cols-3 xl:grid-cols-4'
 const LT = String.fromCharCode(92) + 'u003c' // "<" written so a title can never close the script tag
 
 export type Trail = [name: string, path: string][]

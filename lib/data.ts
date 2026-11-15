@@ -2,7 +2,7 @@
 // scores, trailers and long descriptions; PandaScore adds esports. Each source fails soft: whatever answers is shown.
 import { unstable_cache } from 'next/cache'
 import { cache } from 'react'
-import { type BrowseQuery, type Ev, type Found, type Game, type Payload, type Platform, BROWSE_PAGE, BROWSE_PAGES, expandQuery, gameSlug, iso, lite, shift } from './core'
+import { type BrowseQuery, type Ev, type Found, type Game, type Payload, type Platform, type Span, BROWSE_PAGE, BROWSE_PAGES, expandQuery, gameSlug, genreName, iso, lite, shift } from './core'
 import { allow, hasDb, q } from './db'
 
 const env = process.env
@@ -121,18 +121,23 @@ const igdbScore = (g: IgdbGame) => ((g.aggregated_rating_count ?? 0) >= 3 && g.a
 /** Players' average out of 5, once at least five have rated the game. */
 const igdbPlayers = (g: IgdbGame) => ((g.rating_count ?? 0) >= 5 && g.rating ? Math.round(g.rating / 2) / 10 : undefined)
 
-/** How exactly the first release date is known: a day, a month, or less (a year, a quarter, TBD). */
-function precision(g: IgdbGame): 'day' | 'month' | 'vague' {
-  const r = g.release_dates?.find((x) => x.date === g.first_release_date)
-  if (typeof r?.date_format === 'number') return r.date_format === 0 ? 'day' : r.date_format === 1 ? 'month' : 'vague'
+/** How exactly the first release date is known: a day, a month, a quarter, a year, or not at all (TBD, or IGDB does not say). */
+function precision(g: IgdbGame): 'day' | 'month' | 'quarter' | 'year' | 'vague' {
+  const r = g.release_dates?.find((x) => x.date === g.first_release_date), f = r?.date_format
+  if (typeof f === 'number') return f === 0 ? 'day' : f === 1 ? 'month' : f === 2 ? 'year' : f >= 3 && f <= 6 ? 'quarter' : 'vague'
   const human = r?.human ?? ''
-  return /^[a-z]{3,9}\.? \d{1,2}, \d{4}$/i.test(human) ? 'day' : /^[a-z]{3,9}\.? \d{4}$/i.test(human) ? 'month' : 'vague'
+  return /^[a-z]{3,9}[.]? [0-9]{1,2}, [0-9]{4}$/i.test(human) ? 'day' : /^[a-z]{3,9}[.]? [0-9]{4}$/i.test(human) ? 'month' : /^q[1-4] [0-9]{4}$/i.test(human) ? 'quarter' : /^[0-9]{4}$/.test(human) ? 'year' : 'vague'
 }
-/** A day, or a month (tba). The calendar leaves a year, a quarter and "TBD" off; `any` keeps them (tba) and games with no date at all (start ''). */
-function igdbWhen(g: IgdbGame, any = false): { start: string; tba?: boolean; exact?: boolean } | null {
+/**
+ * A day, or a month (tba). The calendar leaves a quarter, a year and "TBD" off; `any` keeps them (tba, with the span the date stands for:
+ * a quarter, or a year when nothing finer is certain) and games with no date at all (start '').
+ */
+function igdbWhen(g: IgdbGame, any = false): { start: string; tba?: boolean; exact?: boolean; span?: Span } | null {
   if (!g.first_release_date) return any ? { start: '', tba: true } : null
   const start = new Date(g.first_release_date * 1000).toISOString().slice(0, 10), p = precision(g)
-  return p === 'day' ? { start, exact: true } : p === 'month' || any ? { start, tba: true } : null
+  if (p === 'day') return { start, exact: true }
+  if (p === 'month') return { start, tba: true }
+  return any ? { start, tba: true, span: p === 'quarter' ? 'quarter' : 'year' } : null
 }
 /** calendar: a date and artwork (unless people are waiting for it); browse: any date; saved: whatever there is. */
 function igdbEv(g: IgdbGame, mode: 'calendar' | 'browse' | 'saved' = 'calendar'): Ev | null {
@@ -142,7 +147,7 @@ function igdbEv(g: IgdbGame, mode: 'calendar' | 'browse' | 'saved' = 'calendar')
   if (mode === 'calendar' && !pic && (g.hypes ?? 0) < 20) return null // no artwork at all, and not a game people wait for
   const platforms = [...new Set((g.platforms ?? []).map((p) => igdbPlatform(p.name)).filter(Boolean))] as Platform[], title = clean(g.name)
   return {
-    id: `igdb-${g.id}`, slug: g.slug || kebab(`igdb ${g.id} ${title}`), title, kind: 'release', start: when.start, tba: when.tba || undefined, platforms,
+    id: `igdb-${g.id}`, slug: g.slug || kebab(`igdb ${g.id} ${title}`), title, kind: 'release', start: when.start, tba: when.tba || undefined, span: when.span, platforms,
     thumb: art ? igImg(art, 'screenshot_big') : cover ? igImg(cover, 'cover_big') : '', image: pic ? igImg(pic, '1080p') : undefined,
     shots: (g.screenshots ?? []).slice(1, 5).map((x) => igImg(x.image_id, 'screenshot_med')), genres: (g.genres ?? []).map((x) => x.name),
     rating: igdbPlayers(g), metacritic: igdbScore(g), pop: Math.min(2500, (g.hypes ?? 0) * 10 + Math.min(500, g.total_rating_count ?? 0)),
@@ -204,7 +209,7 @@ async function igdbGame(where: string): Promise<Game | null> {
   const shops = (g.websites ?? []).flatMap((w) => { const shop = SHOPS.find(([re]) => re.test(w.url))?.[1]; return shop ? [{ name: shop, url: w.url }] : [] })
   return {
     id: `igdb-${g.id}`, slug: g.slug || kebab(`igdb ${g.id} ${name}`), name, description: (long.length > own.length ? long : own) || a?.short_description || undefined,
-    released: when?.exact ? when.start : undefined, website: urls.find((u) => !SOCIAL.test(u) && !SHOPS.some(([re]) => re.test(u))) ?? (a?.website || undefined),
+    released: when?.exact ? when.start : undefined, loose: when && !when.exact && when.start ? { start: when.start, span: when.span } : undefined, website: urls.find((u) => !SOCIAL.test(u) && !SHOPS.some(([re]) => re.test(u))) ?? (a?.website || undefined),
     image: pics[0] ?? (g.cover ? igImg(g.cover.image_id, '1080p') : undefined), rating: igdbPlayers(g), metacritic: steamScore ?? critics, scoreFrom: !steamScore && critics ? 'IGDB critics' : undefined,
     age: more.age, playtime: more.playtime, trailer: clip ?? (video ? { youtube: video.video_id } : undefined),
     genres: (g.genres ?? []).map((x) => x.name), tags: (g.themes ?? []).map((x) => x.name), platforms: (g.platforms ?? []).map((x) => x.name),
@@ -216,12 +221,15 @@ async function igdbGame(where: string): Promise<Game | null> {
 // ── Search: IGDB and Steam's store at once, under every spelling ──
 
 const fold = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f'’]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+const NUMERALS: Record<string, string> = { ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8', ix: '9', x: '10' }
+/** A name as it is compared: folded, roman numerals as digits and no leading "the", so "witcher 4" is "The Witcher IV". */
+const plain = (s: string) => fold(s).split(' ').map((w) => NUMERALS[w] ?? w).join(' ').replace(/^the /, '')
 /** How well a title answers any spelling of what was typed: the exact name, its start, or all its words. */
 function relevance(title: string, variants: string[]) {
-  const t = fold(title), words = t.split(' ')
+  const t = plain(title), words = t.split(' ')
   let best = 0
   for (const v of variants) {
-    const f = fold(v)
+    const f = plain(v)
     if (!f) continue
     const score = t === f ? 100 : t.startsWith(f) ? 70 : f.split(' ').every((x) => words.some((w) => w.startsWith(x))) ? 40 : 0
     if (score > best) best = score
@@ -241,9 +249,9 @@ export async function searchGames(q: string): Promise<Found[]> {
   const found = new Map<string, { f: Found; rel: number; score: number }>(), seen = new Set<string>()
   const add = (id: string, title: string, rel: number, pop: number, { slug, ...f }: Omit<Found, 'key' | 'title'>) => { seen.add(same(title)); found.set(id, { rel, score: rel + pop, f: { key: id, slug, title, ...f } }) }
   for (const g of igs.flatMap((r) => r ?? [])) {
-    const title = clean(g.name), id = `igdb-${g.id}`, pic = g.screenshots?.[0]?.image_id ?? g.artworks?.[0]?.image_id, cover = g.cover?.image_id
+    const title = clean(g.name), id = `igdb-${g.id}`, pic = g.screenshots?.[0]?.image_id ?? g.artworks?.[0]?.image_id, cover = g.cover?.image_id, when = igdbWhen(g, true)
     if (!found.has(id)) add(id, title, relevance(title, variants), Math.min(30, Math.log10(1 + (g.hypes ?? 0) * 10 + (g.total_rating_count ?? 0) * 5) * 8),
-      { slug: g.slug || kebab(`igdb ${g.id} ${title}`), released: igdbWhen(g, true)?.start || undefined, thumb: pic ? igImg(pic, 'screenshot_big') : cover ? igImg(cover, 'cover_big') : '', metacritic: igdbScore(g) })
+      { slug: g.slug || kebab(`igdb ${g.id} ${title}`), released: when?.start || undefined, tba: (when?.start && when.tba) || undefined, span: when?.span, thumb: pic ? igImg(pic, 'screenshot_big') : cover ? igImg(cover, 'cover_big') : '', metacritic: igdbScore(g) })
   }
   // Steam search gives no date: those are "undated" (they may well be out)
   for (const s of shops.flatMap((r) => r?.items ?? [])) {
@@ -361,7 +369,7 @@ function steamEv(id: string, a: SteamApp, date: string | undefined, pop: number)
   return {
     id: `steam-${id}`, slug: kebab(`steam ${id} ${title}`), title, kind: 'release', start: steamDate(a.release_date?.date) ?? date ?? '',
     platforms: ['PC'], thumb: a.header_image, image: shots[0]?.path_full ?? a.header_image, shots: shots.slice(0, 4).map((s) => s.path_thumbnail),
-    genres: (a.genres ?? []).map((g) => g.description), metacritic: a.metacritic?.score, pop,
+    genres: [...new Set((a.genres ?? []).map((g) => genreName(g.description)))], metacritic: a.metacritic?.score, pop, // one name per genre (core.ts)
   }
 }
 /** Steam's first trailer as a video file. */
@@ -546,7 +554,7 @@ export async function monthReleases(month: string): Promise<{ events: Ev[]; toda
   if (from >= held) return { events: data.events.filter((e) => e.kind === 'release' && e.start >= from && e.start <= to).sort(byDate).map(bare), today, updated: data.updated }
   const rows = await igdb(`fields ${IG_FIELDS}; where first_release_date >= ${unix(from)} & first_release_date < ${unix(shift(to, 1))} & (hypes > 0 | total_rating_count > 0) & ${CATALOG}; sort total_rating_count desc; limit 150;`, 7 * DAY)
   if (rows === undefined) throw new Error('IGDB did not answer')
-  const events = rows.filter((g) => precision(g) !== 'vague').flatMap((g) => igdbEv(g, 'browse') ?? []).filter((e) => e.start >= from && e.start <= to)
+  const events = rows.filter((g) => ['day', 'month'].includes(precision(g))).flatMap((g) => igdbEv(g, 'browse') ?? []).filter((e) => e.start >= from && e.start <= to)
   return { events: events.sort(byDate).map(bare), today }
 }
 
@@ -558,12 +566,15 @@ export async function releaseMonths(): Promise<{ month: string; count?: number }
   return out
 }
 
-/** One platform's releases: those ahead by date, and those out in the last 30 days, most followed first. */
+/**
+ * One platform's releases: those ahead by date, and those out in the last 30 days, most followed first. Both lists reach a day
+ * across `today`: the page splits them again at the visitor's own day (this server's day is UTC, and the page is kept for an hour).
+ */
 export async function platformReleases(p: Platform) {
   const data = await liveEvents(), { today } = data, on = data.events.filter((e) => e.kind === 'release' && e.platforms.includes(p))
   return {
-    today, updated: data.updated, ahead: on.filter((e) => e.start >= today).sort(byDate).map(bare),
-    recent: on.filter((e) => e.start < today && e.start >= shift(today, -30)).sort((a, b) => b.pop - a.pop).map(bare),
+    today, updated: data.updated, ahead: on.filter((e) => e.start >= shift(today, -1)).sort(byDate).map(bare),
+    recent: on.filter((e) => e.start <= today && e.start >= shift(today, -30)).sort((a, b) => b.pop - a.pop).map(bare),
   }
 }
 

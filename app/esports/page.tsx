@@ -1,16 +1,15 @@
-import type { Metadata } from 'next'
+import type { Metadata, ResolvingMetadata } from 'next'
 import Link from 'next/link'
 import { ListPage, Part, ldList } from '@/components/lists'
 import { SITE, esportsPath, status } from '@/lib/core'
 import { esportsGames } from '@/lib/data'
+import { card } from '@/lib/meta'
 
 export const revalidate = 3600
 
 const title = 'Esports schedules by game'
-export const metadata: Metadata = {
-  title, alternates: { canonical: '/esports' },
-  description: 'Live and upcoming esports tournaments for each game, with dates and prize pools from PandaScore, checked every hour.',
-}
+const description = 'Live and upcoming esports tournaments for each game, with dates and prize pools from PandaScore, checked every hour.'
+export const generateMetadata = async (_: unknown, parent: ResolvingMetadata): Promise<Metadata> => ({ title, description, alternates: { canonical: '/esports' }, ...(await card(parent, title, description, '/esports')) })
 
 export default async function Esports() {
   const { today, games } = await esportsGames()

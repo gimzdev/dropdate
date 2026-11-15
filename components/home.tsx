@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type KeyboardEvent, type ReactNode, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { type Ev, type Kind, type Payload, type Platform, browseHref, gap, googleUrl, href, iso, longDate, monthLabel, monthShort, range, shift, srcSet, status, toDate, weekday } from '@/lib/core'
+import { type Ev, type Kind, type Payload, type Platform, browseHref, gap, googleUrl, href, iso, longDate, monthLabel, monthShort, period, range, shift, srcSet, status, toDate, weekday } from '@/lib/core'
 import { type Chip, removeChip, search } from '@/lib/search'
 import {
   BigDate, Card, Circled, Countdown, DateBlock, EXPLORE_EVENT, type ExploreIntent, FeedPanel, FilterBar, Heart, Icon, Img, Open, PlatformPills, SaveButton, Score, Section, Select, Sep,
@@ -64,13 +64,13 @@ export function Hero({ slides, today: serverToday }: { slides: Ev[]; today: stri
       </div>
       <div className="wrap flex min-h-[max(660px,100svh)] flex-col pt-24 pb-6 md:pb-10">
         <div key={s.id} className="flex flex-1 animate-enter flex-col justify-end pb-10 md:pb-14">
-          <BigDate date={s.start} tba={s.tba} size="text-[clamp(5.5rem,5vw+3.25rem,9.5rem)]" unknown="Exact date not announced" />
+          <BigDate date={s.start} tba={s.tba} span={s.span} size="text-[clamp(5.5rem,5vw+3.25rem,9.5rem)]" unknown="Exact date not announced" />
           <h2 className="display mt-6 max-w-[15ch] text-[clamp(2.75rem,3.4vw+1.6rem,5.25rem)]"><span className="sr-only">{s.tba ? `${monthLabel(s.start.slice(0, 7))}: ` : `${longDate(s.start)}: `}</span>{s.title}</h2>
           <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2.5">
             {s.platforms.length > 0 && <span className="flex flex-wrap gap-1.5">{s.platforms.map((p) => <span key={p} className="rounded-full bg-white/12 px-3 py-1 text-[13px] font-medium ring-1 ring-white/15 backdrop-blur-md ring-inset">{p}</span>)}</span>}
             {s.genres.length > 0 && <span className="text-[15px] text-white/65">{s.genres.slice(0, 3).join(', ')}</span>}
           </div>
-          <Countdown start={s.start} today={today} className="mt-6 short:hidden" />
+          {!s.tba && <Countdown start={s.start} today={today} className="mt-6 short:hidden" />}
           <div className="mt-7 flex flex-wrap gap-3">
             <Link href={href(s)} className="btn btn-mark">View game</Link>
             <a href={googleUrl(s)} target="_blank" rel="noopener noreferrer" className="btn btn-glass"><Icon name="plus" />Add to calendar</a>
@@ -83,7 +83,7 @@ export function Hero({ slides, today: serverToday }: { slides: Ev[]; today: stri
               {slides.map((x, k) => (
                 <li key={x.id}>
                   <button type="button" onClick={() => go(k)} aria-label={`Show ${x.title}`} aria-current={k === i ? 'true' : undefined} className="group/t block w-full py-3 text-left md:py-0">
-                    <span className={`relative hidden aspect-video overflow-hidden rounded-art ring-2 transition md:block ${k === i ? 'ring-white' : 'opacity-55 ring-transparent group-hover/t:opacity-100'}`}><Img src={x.thumb} className="h-full w-full object-cover" /></span>
+                    <span className={`relative hidden aspect-video overflow-hidden rounded-art ring-2 transition md:block ${k === i ? 'ring-white' : 'opacity-55 ring-transparent group-hover/t:opacity-100'}`}><Img src={x.thumb} sizes="180px" className="h-full w-full object-cover" /></span>
                     <span className="block h-[3px] overflow-hidden rounded-full bg-white/20 md:mt-2.5">{k === i && <span key={`${i}-${paused}`} className={`block h-full origin-left bg-mark ${paused ? '' : 'animate-bar'}`} />}</span>
                     <span className={`mt-2 hidden truncate text-[13px] font-medium transition md:block ${k === i ? 'text-white' : 'text-white/55 group-hover/t:text-white/85'}`}>{x.title}</span>
                   </button>
@@ -102,7 +102,7 @@ export function WeekStrip({ items, today: serverToday }: { items: Ev[]; today: s
   const today = useToday(serverToday), explore = useExplore()
   const byPop = (a: Ev, b: Ev) => b.pop - a.pop
   const days = Array.from({ length: 7 }, (_, k) => shift(today, k)).map((d) => ({
-    d, list: items.filter((e) => e.start === d).sort(byPop), finals: items.filter((e) => e.kind === 'tournament' && e.end === d && e.start !== d).sort(byPop),
+    d, list: items.filter((e) => e.start === d && !e.tba).sort(byPop), finals: items.filter((e) => e.kind === 'tournament' && e.end === d && e.start !== d).sort(byPop),
   }))
   const total = days.reduce((sum, x) => sum + x.list.length, 0)
   return (
@@ -133,7 +133,7 @@ function Day({ d, list, finals, today, onOpen }: { d: string; list: Ev[]; finals
       {lead ? (
         <Open e={lead} className="group relative block aspect-[16/10] overflow-hidden rounded-art bg-raised">
           {lead.kind === 'tournament' ? <Thumb e={lead} className="absolute inset-0 h-full w-full" />
-            : lead.thumb ? <Img src={lead.thumb} className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" /> : null}
+            : lead.thumb ? <Img src={lead.thumb} sizes="(min-width: 1280px) 180px, 220px" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" /> : null}
           <span className="absolute inset-0 bg-linear-to-t from-black/90 via-black/20 to-transparent" />
           <span className="absolute inset-x-3 bottom-2.5">
             {lead.kind === 'tournament' && <span className="block text-[12px] font-semibold text-arena">{ending ? 'Esports · Final day' : 'Esports'}</span>}
@@ -152,7 +152,7 @@ function Day({ d, list, finals, today, onOpen }: { d: string; list: Ev[]; finals
           ))}
         </ul>
       )}
-      {extra > 0 && <button type="button" onClick={onOpen} className="mt-2 self-start text-[13px] font-semibold underline decoration-line/30 underline-offset-4 transition hover:decoration-mark">{extra} more</button>}
+      {extra > 0 && <button type="button" onClick={onOpen} className="mt-1 -ml-1 self-start rounded-md px-1 py-1.5 text-[13px] font-semibold underline decoration-line/30 underline-offset-4 transition hover:decoration-mark">{extra} more</button>}
     </li>
   )
 }
@@ -176,7 +176,7 @@ export function Upcoming({ items, today: serverToday }: { items: Ev[]; today: st
               {list.map((e) => (
                 <li key={e.id} className="flex items-center gap-1">
                   <Open e={e} className="group flex min-w-0 flex-1 items-center gap-3.5 py-3">
-                    <DateBlock start={e.start} tba={e.tba} size="sm" />
+                    <DateBlock start={e.start} tba={e.tba} span={e.span} past={e.start < today} size="sm" />
                     <Thumb e={e} className="h-12 w-[76px] rounded-[7px]" />
                     <span className="min-w-0 flex-1">
                       <span className={`block truncate text-[15px] font-semibold ${underline}`}>{e.title}</span>
@@ -199,14 +199,14 @@ function Tile({ e, today, big, className = '' }: { e: Ev; today: string; big?: b
   return (
     <article className={`group relative overflow-hidden rounded-art bg-raised ${big ? 'col-span-2 row-span-2' : ''} ${className}`}>
       <Open e={e} className="absolute inset-0 block">
-        {src && <img src={src} srcSet={big ? srcSet(e.image) : undefined} sizes={big ? '(min-width: 1024px) 560px, 100vw' : '(min-width: 1024px) 280px, 50vw'} alt="" loading="lazy" decoding="async" onError={fallback}
+        {src && <img src={src} srcSet={srcSet(src)} sizes={big ? '(min-width: 1024px) 560px, 100vw' : '(min-width: 1024px) 280px, 50vw'} alt="" loading="lazy" decoding="async" onError={fallback}
           className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.03]" />}
         <span className="absolute inset-0 bg-linear-to-t from-black/90 via-black/25 to-black/0" />
         <span className={`absolute inset-x-0 bottom-0 flex items-end gap-3 p-4 text-white ${big ? 'md:gap-4 md:p-6' : ''}`}>
-          <DateBlock start={e.start} tba={e.tba} size={big ? 'lg' : 'md'} />
+          <DateBlock start={e.start} tba={e.tba} span={e.span} past={e.start < today} size={big ? 'lg' : 'md'} />
           <span className="min-w-0 pb-0.5">
             <span className={`block text-[13px] font-semibold ${s.tone === 'soon' ? 'text-mark' : 'text-white/75'}`}>{s.label}</span>
-            <span className={`display mt-1 block ${big ? 'text-[clamp(1.9rem,1.6vw+1.2rem,2.9rem)]' : 'line-clamp-2 text-[19px] leading-[1]'}`}>{e.title}</span>
+            <span className={`display mt-1 ${big ? 'line-clamp-3 text-[clamp(1.9rem,1.6vw+1.2rem,2.9rem)]' : 'line-clamp-2 pb-px text-[19px] leading-[1.05]'}`}>{e.title}</span>
           </span>
         </span>
       </Open>
@@ -231,7 +231,7 @@ export function Fresh({ items, today: serverToday }: { items: Ev[]; today: strin
                 <span className="min-w-0 flex-1">
                   <span className={`line-clamp-2 text-[16px] leading-snug font-semibold ${underline}`}>{e.title}</span>
                   <span className="mt-0.5 flex gap-3 text-[13px]">
-                    <span className="shrink-0 font-semibold text-go">{days < 1 ? 'Out today' : days === 1 ? 'Out yesterday' : `Out ${days} days ago`}</span>
+                    <span className="shrink-0 font-semibold text-go">{e.tba ? `Out in ${period(e).split(' ')[0]}` : days < 1 ? 'Out today' : days === 1 ? 'Out yesterday' : `Out ${days} days ago`}</span>
                     <span className="truncate text-muted">{e.genres.slice(0, 2).join(', ')}</span>
                   </span>
                 </span>
@@ -359,7 +359,8 @@ export function Explorer({ data }: { data: Payload }) {
     return [[...m], count] as const
   }, [list, limit, sort])
 
-  const dayList = day ? list.filter((e) => e.start <= day && (e.end ?? e.start) >= day) : []
+  const dated = useMemo(() => list.filter((e) => !e.tba), [list]), loose = view === 'calendar' ? list.filter((e) => e.tba) : [] // a release set for a month has no day to sit on
+  const dayList = day ? dated.filter((e) => e.start <= day && (e.end ?? e.start) >= day) : []
   const filtered = !!q.trim() || kind !== 'all' || platform !== 'all' || genre !== 'all' || onlySaved
   const moveMonth = (n: number) => { setMonth(iso(new Date(+month.slice(0, 4), +month.slice(5) - 1 + n, 1)).slice(0, 7)); setDay(undefined) }
   const reset = () => { setQ(''); setKind('all'); setPlatform('all'); setGenre('all'); setOnlySaved(false) }
@@ -403,7 +404,7 @@ export function Explorer({ data }: { data: Payload }) {
 
       {view === 'calendar' ? (
         <div>
-          <MonthGrid month={month} events={list} today={today} selected={day} onSelect={(d) => { setDay(d); setMonth(d.slice(0, 7)) }} onMonth={moveMonth} />
+          <MonthGrid month={month} events={dated} today={today} selected={day} onSelect={(d) => { setDay(d); setMonth(d.slice(0, 7)) }} onMonth={moveMonth} />
           <div className="mt-10">
             {day ? (
               <>
@@ -412,6 +413,12 @@ export function Explorer({ data }: { data: Payload }) {
               </>
             ) : <p className="text-center text-[15px] text-muted">Pick a day to see everything on it.</p>}
           </div>
+          {loose.length > 0 && (
+            <div className="mt-14">
+              <h3 className="mb-6 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line/10 pb-3"><span className="display text-[34px]">Sometime in {monthLabel(month).split(' ')[0]}</span><span className="text-[15px] text-muted">{loose.length} {loose.length === 1 ? 'game' : 'games'} set for {monthLabel(month)} {month < today.slice(0, 7) ? 'whose day IGDB does not give' : 'without a day yet'}</span></h3>
+              {cards(loose)}
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -453,7 +460,7 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
   const term = text.trim(), { found } = useLookup(term.length >= 2 && local.length < 6 ? term : '') // titles the calendar lacks (older games)
   const hits = useMemo(() => {
     const seen = new Set(local.map((e) => e.slug))
-    const more = (found ?? []).filter((g) => !seen.has(g.slug)).map((g): Ev => ({ id: `lookup-${g.slug}`, slug: g.slug, title: g.title, kind: 'release', start: g.released ?? '', thumb: g.thumb, platforms: [], genres: [], pop: 0 }))
+    const more = (found ?? []).filter((g) => !seen.has(g.slug)).map((g): Ev => ({ id: `lookup-${g.slug}`, slug: g.slug, title: g.title, kind: 'release', start: g.released ?? '', tba: g.tba, span: g.span, thumb: g.thumb, platforms: [], genres: [], pop: 0 }))
     return [...local, ...more].slice(0, 10)
   }, [local, found])
   useEffect(() => setActive(-1), [value])
@@ -472,7 +479,7 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
       <div ref={wrap} className="relative">
         <Icon name="search" className="pointer-events-none absolute top-1/2 left-5 h-5 w-5 -translate-y-1/2 text-muted" />
         <input ref={field} id="search-input" value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onFocus={() => { clearTimeout(blurred.current); setFocus(true) }} onBlur={() => { blurred.current = setTimeout(() => setFocus(false), 120) }}
-          role="combobox" aria-expanded={expanded} aria-controls="search-results" aria-autocomplete="list" aria-activedescendant={expanded && active >= 0 ? (hits[active] ? `hit-${hits[active].id}` : 'hit-browse') : undefined}
+          role="combobox" aria-expanded={expanded} aria-controls={expanded ? 'search-results' : undefined} aria-autocomplete="list" aria-activedescendant={expanded && active >= 0 ? (hits[active] ? `hit-${hits[active].id}` : 'hit-browse') : undefined}
           aria-label="Search games and tournaments" autoComplete="off" spellCheck={false} enterKeyHint="search" placeholder="Search games, platforms or dates"
           className={`h-14 w-full rounded-full bg-panel pl-14 text-base text-fg ring-1 ring-line/12 transition outline-none ring-inset placeholder:text-dim hover:ring-line/25 focus:ring-2 focus:ring-mark sm:h-16 sm:text-[17px] ${value ? 'pr-24' : 'pr-5 sm:pr-14'}`} />
         <div className="absolute top-1/2 right-3 -translate-y-1/2">
@@ -486,7 +493,7 @@ function SearchBox({ value, query, onChange, events, today, chips, text }: { val
                 <Thumb e={e} className="h-10 w-16 rounded-[6px]" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[15px] font-semibold">{e.title}</span>
-                  <span className="block truncate text-[13px] text-muted">{e.start ? range(e.start, e.end) : 'Release date not announced'}</span>
+                  <span className="block truncate text-[13px] text-muted">{!e.start ? 'Release date not announced' : e.tba ? period(e) : range(e.start, e.end)}</span>
                 </span>
                 <span className={`shrink-0 text-[13px] font-semibold ${e.kind === 'tournament' ? 'text-arena' : 'text-muted'}`}>{e.kind === 'tournament' ? 'Esports' : 'Game'}</span>
               </li>

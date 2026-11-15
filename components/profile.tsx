@@ -46,7 +46,7 @@ function Tile({ e, list, today, done, telling }: { e: Ev; list: TabName; today: 
           {!!e.metacritic && <Score n={e.metacritic} className="absolute bottom-2.5 left-2.5" />}
         </div>
         <div className="mt-3 flex gap-3">
-          {!played && !!e.start && <div className="max-[359px]:hidden"><DateBlock start={e.start} tba={e.tba} /></div>}
+          {!played && !!e.start && <div className="max-[359px]:hidden"><DateBlock start={e.start} tba={e.tba} span={e.span} past={e.start < today} /></div>}
           <div className="min-w-0 pt-px">
             <h3 className="line-clamp-2 text-[15px] leading-snug font-semibold decoration-line/40 underline-offset-[3px] group-hover:underline">{e.title}</h3>
             <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] leading-snug">
@@ -97,7 +97,7 @@ function AddGame({ list, today, has, onAdded }: { list: TabName; today: string; 
   }
   async function add(f: Found) {
     setAdding(f.key)
-    onAdded({ id: f.key, title: f.title, kind: 'release', start: f.released ?? '', thumb: f.thumb, pop: 0, platforms: [], genres: [], slug: f.slug, ...(f.metacritic && { metacritic: f.metacritic }) })
+    onAdded({ id: f.key, title: f.title, kind: 'release', start: f.released ?? '', thumb: f.thumb, pop: 0, platforms: [], genres: [], slug: f.slug, ...(f.tba && { tba: true }), ...(f.span && { span: f.span }), ...(f.metacritic && { metacritic: f.metacritic }) })
     const saved = await setList(list, f.key, true)
     if (saved?.ev) onAdded(saved.ev)
     setAdding('')

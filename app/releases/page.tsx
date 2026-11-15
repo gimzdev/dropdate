@@ -1,15 +1,14 @@
-import type { Metadata } from 'next'
+import type { Metadata, ResolvingMetadata } from 'next'
 import { ListPage, Part, Pills, ldList } from '@/components/lists'
 import { PLATFORMS, SITE, iso, monthLabel, monthPath, platformPath } from '@/lib/core'
 import { releaseMonths } from '@/lib/data'
+import { card } from '@/lib/meta'
 
 export const revalidate = 3600
 
 const title = 'Game releases by month'
-export const metadata: Metadata = {
-  title, alternates: { canonical: '/releases' },
-  description: 'The most awaited games of every month, by day, and what is coming to PC, PlayStation, Xbox, Nintendo and mobile. Dates from IGDB and Steam.',
-}
+const description = 'The most awaited games of every month, by day, and what is coming to PC, PlayStation, Xbox, Nintendo and mobile. Dates from IGDB and Steam.'
+export const generateMetadata = async (_: unknown, parent: ResolvingMetadata): Promise<Metadata> => ({ title, description, alternates: { canonical: '/releases' }, ...(await card(parent, title, description, '/releases')) })
 
 export default async function Releases() {
   const months = await releaseMonths(), shown = months.filter((m) => m.count === undefined || m.count > 0), now = iso(new Date()).slice(0, 4)

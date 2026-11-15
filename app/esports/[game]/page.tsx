@@ -1,10 +1,12 @@
-import type { Metadata } from 'next'
+import type { Metadata, ResolvingMetadata } from 'next'
 import { notFound } from 'next/navigation'
 import { cache } from 'react'
 import { Schedule } from '@/components/home'
+import { FeedPanel } from '@/components/ui'
 import { ListPage, Part, Pills, type Listed, ldList } from '@/components/lists'
-import { type Ev, esportsPath, range, status } from '@/lib/core'
+import { type Ev, SITE, esportsPath, range, status } from '@/lib/core'
 import { esportsGames } from '@/lib/data'
+import { card } from '@/lib/meta'
 
 // One game's tournaments: /esports/league-of-legends, /esports/counter-strike, ...
 
@@ -15,14 +17,12 @@ type Props = { params: Promise<{ game: string }> }
 const load = cache(esportsGames)
 const listed = (e: Ev): Listed => ({ name: e.title, url: e.url ?? '', item: { '@type': 'SportsEvent', name: e.title, startDate: e.start, endDate: e.end ?? e.start, ...(e.url && { url: e.url }) } })
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: Props, parent: ResolvingMetadata): Promise<Metadata> {
   const { games } = await load(), g = games.get((await params).game)
   if (!g) return { title: 'Esports' }
-  const next = g.ahead.slice(0, 2).map((e) => `${e.title} (${range(e.start, e.end)})`)
-  return {
-    title: `${g.name} esports schedule`, alternates: { canonical: esportsPath(g.name) },
-    description: `${g.name} tournaments live now and coming up, with dates and prize pools${next.length ? `: ${next.join(', ')}` : ''}. From PandaScore, checked every hour.`,
-  }
+  const next = g.ahead.slice(0, 2).map((e) => `${e.title} (${range(e.start, e.end)})`), title = `${g.name} esports schedule`
+  const description = `${g.name} tournaments live now and coming up, with dates and prize pools${next.length ? `: ${next.join(', ')}` : ''}. From PandaScore, checked every hour.`
+  return { title, description, alternates: { canonical: esportsPath(g.name) }, ...(await card(parent, title, description, esportsPath(g.name))) }
 }
 
 export default async function EsportsGame({ params }: Props) {
@@ -35,6 +35,13 @@ export default async function EsportsGame({ params }: Props) {
   return (
     <ListPage trail={[['Dropdate', '/'], ['Esports', '/esports'], [g.name, path]]} title={title} intro={intro} ld={ldList(title, path, g.ahead.map(listed))}>
       <Schedule items={g.ahead} today={today} id="ahead" title="Live and coming up" lede={live ? `${live} live right now, then the rest by start date.` : 'By start date, with the prize pool where it is announced.'} />
+      {g.ahead.length > 0 && (
+        <div className="wrap pb-14 md:pb-20">
+          <FeedPanel feed={`${SITE}/api/calendar.ics?type=tournament&genre=${encodeURIComponent(g.name)}`} title={<>Add {g.name} tournaments to your calendar</>} as="h2" className="">
+            <p className="mt-1 max-w-xl text-[15px] text-muted">A live feed of the {g.name} tournaments in the calendar, live and coming up. When a date moves, your calendar follows.</p>
+          </FeedPanel>
+        </div>
+      )}
       <Schedule items={g.ended.slice(0, 12)} today={today} id="ended" title="Ended recently" lede="The latest to finish." />
       {games.size > 1 && (
         <Part id="games" title="Other games">

@@ -12,7 +12,7 @@ function monthOf(w: string) {
   return short >= 0 ? short : w.length < 4 ? -1 : MONTHS.findIndex((m) => m.startsWith(w) || (w.length > 4 && m.length > 5 && dist(w, m, 1) <= 1))
 }
 const SEASONS: Record<string, number> = { spring: 2, summer: 5, fall: 8, autumn: 8, winter: 11 }
-const ALIASES: Record<string, string> = { fps: 'shooter', tps: 'shooter', mmo: 'massively multiplayer', mmorpg: 'massively multiplayer', sim: 'simulation', jrpg: 'rpg', arpg: 'rpg', moba: 'strategy' }
+const ALIASES: Record<string, string> = { fps: 'shooter', tps: 'shooter', mmo: 'massively multiplayer', mmorpg: 'massively multiplayer', sim: 'simulat', jrpg: 'rpg', arpg: 'rpg', moba: 'strategy' } // 'simulat': Simulator (IGDB) and Simulation
 const KINDS: [Kind, string, RegExp][] = [
   ['release', 'Releases', /\b(?:releases?|launch(?:es)?|drops?|games?)\b/i],
   ['tournament', 'Tournaments', /\b(?:tournaments?|esports?|majors?|championships?|cups?|finals?)\b/i],

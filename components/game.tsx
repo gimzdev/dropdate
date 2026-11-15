@@ -59,8 +59,11 @@ export function About({ text, title }: { text: string; title: string }) {
   )
 }
 
-/** A video file plays as it is; a YouTube trailer loads (from youtube-nocookie) only once play is pressed, so the page itself talks to nobody else. */
-export function Trailer({ trailer, title }: { trailer: NonNullable<Game['trailer']>; title: string }) {
+/**
+ * A video file plays as it is; a YouTube trailer loads (from youtube-nocookie) only once play is pressed. Until then the frame shows
+ * `poster`, one of the game's own pictures, so the page asks YouTube for nothing, not even a preview picture.
+ */
+export function Trailer({ trailer, title, poster }: { trailer: NonNullable<Game['trailer']>; title: string; poster?: string }) {
   const [play, setPlay] = useState(false), box = 'aspect-video w-full rounded-panel bg-black'
   if (trailer.src) return <video controls preload="none" poster={trailer.preview} src={trailer.src} className={box} />
   if (!trailer.youtube) return null
@@ -68,7 +71,7 @@ export function Trailer({ trailer, title }: { trailer: NonNullable<Game['trailer
     ? <iframe src={`https://www.youtube-nocookie.com/embed/${trailer.youtube}?autoplay=1&rel=0`} title={`${title} trailer`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" className={`${box} border-0`} />
     : (
       <button type="button" onClick={() => setPlay(true)} aria-label={`Play the ${title} trailer`} className={`group relative block overflow-hidden ${box}`}>
-        <img src={`https://i.ytimg.com/vi/${trailer.youtube}/hqdefault.jpg`} alt="" loading="lazy" className="h-full w-full object-cover opacity-85 transition group-hover:opacity-100" />
+        {poster && <img src={poster} srcSet={srcSet(poster)} sizes="(min-width: 1024px) 860px, 100vw" alt="" loading="lazy" decoding="async" className="h-full w-full object-cover opacity-85 transition group-hover:opacity-100" />}
         <span className="absolute inset-0 grid place-items-center"><span className="grid h-16 w-16 place-items-center rounded-full bg-black/65 text-white backdrop-blur-md transition group-hover:scale-105"><Icon name="play" className="h-7 w-7" /></span></span>
       </button>
     )

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { type AnchorHTMLAttributes, type ReactNode, type RefObject, type SyntheticEvent, type TouchEvent, useEffect, useRef, useState } from 'react'
 import { dismiss, drop, notify, ready, setList, setTell, signOut, signedInNow, useAccount, useNotice, useSaved } from '@/lib/account'
-import { ACCOUNTS, type Ev, type Found, PLATFORMS, type Platform, ago, href, iso, longDate, monthLabel, monthShort, scoreTone, status, toDate, webcal, weekday } from '@/lib/core'
+import { ACCOUNTS, type Ev, type Found, PLATFORMS, type Platform, type Span, ago, href, iso, longDate, monthLabel, monthShort, period, periodShort, scoreTone, srcSet, status, toDate, webcal, weekday } from '@/lib/core'
 import { Heart, Icon, Logo } from './icons'
 import { track } from '@vercel/analytics'
 
@@ -98,40 +98,48 @@ export const Open = ({ e, className, children, ...rest }: OpenProps) =>
   e.slug ? <Link href={href(e)} className={className} {...rest}>{children}</Link>
     : <a href={e.url ?? '#'} target="_blank" rel="noopener noreferrer" className={className} {...rest}>{children}</a>
 
-/** A resized image that fails falls back to the original; anything else hides. */
+/** A picture that fails: a smaller file of it (srcset) gives way to the picture itself, a resized one to the original; anything else hides. */
 export const fallback = (ev: SyntheticEvent<HTMLImageElement>) => {
-  const img = ev.currentTarget, original = img.src.replace(/\/resize\/\d+\/-\//, '/')
-  if (original !== img.src) img.src = original
+  const img = ev.currentTarget, original = img.src.replace(/[/]resize[/][0-9]+[/]-[/]/, '/')
+  if (img.srcset) { img.removeAttribute('srcset'); img.removeAttribute('sizes') }
+  else if (original !== img.src) img.src = original
   else img.style.visibility = 'hidden'
 }
-export const Img = ({ src, className }: { src: string; className: string }) => <img src={src} alt="" loading="lazy" decoding="async" onError={fallback} className={className} />
+/** A lazy picture. `sizes` (the width it is shown at) lets the browser take a smaller file of it where the source has one. */
+export const Img = ({ src, className, sizes }: { src: string; className: string; sizes?: string }) =>
+  <img src={src} srcSet={sizes ? srcSet(src) : undefined} sizes={sizes} alt="" loading="lazy" decoding="async" onError={fallback} className={className} />
 
 export const Thumb = ({ e, className = '' }: { e: Pick<Ev, 'thumb' | 'kind'>; className?: string }) =>
   e.kind === 'tournament' ? (
     <span className={`tile-arena grid shrink-0 place-items-center overflow-hidden ${className}`}>
       {e.thumb ? <Img src={e.thumb} className="h-[66%] w-[66%] object-contain" /> : <Icon name="trophy" className="h-1/2 w-1/2 text-arena/70" stroke={1.5} />}
     </span>
-  ) : e.thumb ? <Img src={e.thumb} className={`block shrink-0 bg-raised object-cover ${className}`} /> : <span className={`block shrink-0 bg-raised ${className}`} />
+  ) : e.thumb ? <Img src={e.thumb} sizes="110px" className={`block shrink-0 bg-raised object-cover ${className}`} /> : <span className={`block shrink-0 bg-raised ${className}`} />
 
 // [box, day, TBA, month] per size
 const DATE = { sm: ['min-w-7', 'text-[23px]', 'text-[15px]', 'mt-0.5 text-[10.5px]'], md: ['min-w-9', 'text-[30px]', 'text-[19px]', 'mt-0.5 text-[11.5px]'], lg: ['min-w-14', 'text-[52px]', 'text-[30px]', 'mt-1 text-[13px]'] }
-export function DateBlock({ start, tba, size = 'md' }: { start: string; tba?: boolean; size?: keyof typeof DATE }) {
-  const [box, num, tbaSize, mon] = DATE[size]
+/**
+ * A date as a small block: the day over its month. Without a day (`tba`), a game still ahead shows TBA over its month, quarter or
+ * year (`span`); one already out (`past`) shows what is known ("Oct" over "1985", or the year alone) and never "to be announced".
+ */
+export function DateBlock({ start, tba, span, past, size = 'md' }: { start: string; tba?: boolean; span?: Span; past?: boolean; size?: keyof typeof DATE }) {
+  const [box, num, tbaSize, mon] = DATE[size], when = { start, span }
+  const top = !tba ? +start.slice(8) : past ? periodShort(when) : 'TBA', under = !tba ? monthShort(start) : !past ? periodShort(when) : span === 'year' ? '' : start.slice(0, 4)
   return (
     <span className={`flex shrink-0 flex-col items-center leading-none ${box}`}>
-      <span className="sr-only">{tba ? `${monthLabel(start.slice(0, 7))}, exact date not announced` : longDate(start)}</span>
-      <span aria-hidden className={`display ${tba ? tbaSize : num}`}>{tba ? 'TBA' : +start.slice(8)}</span>
-      <span aria-hidden className={`font-semibold text-muted ${mon}`}>{monthShort(start)}</span>
+      <span className="sr-only">{!tba ? longDate(start) : past ? period(when) : `${period(when)}, exact ${span ? 'date' : 'day'} not announced`}</span>
+      <span aria-hidden className={`display ${tba ? tbaSize : num}`}>{top}</span>
+      <span aria-hidden className={`font-semibold text-muted ${mon}`}>{under || '\u00a0'}</span>
     </span>
   )
 }
-export function BigDate({ date, tba, size, unknown, label }: { date: string; tba?: boolean; size: string; unknown: string; label?: string }) {
+export function BigDate({ date, tba, span, size, unknown, label }: { date: string; tba?: boolean; span?: Span; size: string; unknown: string; label?: string }) {
   const Tag = label ? 'p' : 'div'
   return (
     <Tag className="flex items-end gap-4">
       {label && <span className="sr-only">{label}</span>}
       <span aria-hidden className={`display ${size} leading-[0.78]`}>{tba ? 'TBA' : +date.slice(8)}</span>
-      <span aria-hidden className="pb-1 leading-tight"><span className="block text-xl font-semibold md:text-2xl">{monthLabel(date.slice(0, 7))}</span><span className="block text-white/65 md:text-lg">{tba ? unknown : weekday(date)}</span></span>
+      <span aria-hidden className="pb-1 leading-tight"><span className="block text-xl font-semibold md:text-2xl">{tba ? period({ start: date, span }) : monthLabel(date.slice(0, 7))}</span><span className="block text-white/65 md:text-lg">{tba ? unknown : weekday(date)}</span></span>
     </Tag>
   )
 }
@@ -298,7 +306,7 @@ function AccountMenu({ className }: { className: string }) {
   const item = 'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium text-muted transition hover:bg-raised hover:text-fg'
   return (
     <div ref={box} className="relative" onBlur={(e) => { if (open && !box.current?.contains(e.relatedTarget as Node | null)) setOpen(false) }}>
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls="account-menu" aria-label={`Account, ${account.email}`} className={`${className} w-9 px-0`}>
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls={open ? 'account-menu' : undefined} aria-label={`Account, ${account.email}`} className={`${className} w-9 px-0`}>
         <span aria-hidden className="text-[15px] font-bold uppercase">{account.email.slice(0, 1)}</span>
       </button>
       {open && (
@@ -344,7 +352,7 @@ export function Header({ overHero = false }: { overHero?: boolean }) {
             <Icon name="search" /><span className="hidden sm:inline">Search</span><span className="kbd hidden opacity-70 md:inline-grid">/</span>
           </button>
           {ACCOUNTS ? <AccountMenu className={ctl} /> : <WishlistButton className={ctl} onClick={() => go({ list: true })} />}
-          <button type="button" onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} aria-controls="site-menu" className={`${ctl} w-9 px-0 lg:hidden`}><Icon name={open ? 'close' : 'menu'} /></button>
+          <button type="button" onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} aria-controls={open ? 'site-menu' : undefined} className={`${ctl} w-9 px-0 lg:hidden`}><Icon name={open ? 'close' : 'menu'} /></button>
         </div>
       </div>
       {open && (
@@ -416,8 +424,8 @@ export const warmShots = () => { if (matchMedia('(hover: hover)').matches) (wind
  * An event as a card. `row`: a compact row on phones. `when` replaces the status ("2015", not "Out now"). `outside`: a game the calendar
  * does not hold, kept only in an account. `lazy`: its screenshots were left out of the page and load on first hover.
  */
-export function Card({ e, today, row, when, outside, lazy }: { e: Ev; today: string; row?: boolean; when?: string; outside?: boolean; lazy?: boolean }) {
-  const esport = e.kind === 'tournament', s = status(e, today)
+export function Card({ e, today: serverToday, row, when, outside, lazy }: { e: Ev; today: string; row?: boolean; when?: string; outside?: boolean; lazy?: boolean }) {
+  const today = useToday(serverToday), esport = e.kind === 'tournament', s = status(e, today) // "Out today" and "Tomorrow" follow the visitor's day, not the server's
   const [shots, setShots] = useState<string[]>(), [on, setOn] = useState(false), [frame, setFrame] = useState(0)
   const frames = !esport && e.thumb ? [e.thumb, ...(shots ?? e.shots ?? [])] : []
   useEffect(() => {
@@ -436,7 +444,7 @@ export function Card({ e, today, row, when, outside, lazy }: { e: Ev; today: str
             e.thumb ? <Img src={e.thumb} className="absolute inset-0 m-auto h-[52%] w-[52%] object-contain drop-shadow-[0_10px_24px_rgb(0_0_0/0.5)]" />
               : <Icon name="trophy" className="absolute inset-0 m-auto h-12 w-12 text-arena/60" stroke={1.5} />
           ) : frames.length ? (
-            <img src={frames[frame]} alt="" loading="lazy" decoding="async" onError={fallback} onLoad={(ev) => { ev.currentTarget.style.visibility = '' }} className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
+            <img src={frames[frame]} srcSet={srcSet(frames[frame])} sizes={row ? '(min-width: 1280px) 320px, (min-width: 1024px) 31vw, (min-width: 640px) 47vw, 132px' : '280px'} alt="" loading="lazy" decoding="async" onError={fallback} onLoad={(ev) => { ev.currentTarget.style.visibility = '' }} className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
           ) : <span className="display absolute inset-0 grid place-items-center p-6 text-center text-2xl text-dim">{e.genres[0] ?? 'Coming soon'}</span>}
           {frames.length > 1 && (
             <span aria-hidden className="pointer-events-none absolute top-3 right-14 left-3 flex gap-1 opacity-0 transition group-hover:opacity-100">
@@ -447,7 +455,7 @@ export function Card({ e, today, row, when, outside, lazy }: { e: Ev; today: str
             : !!e.metacritic && <Score n={e.metacritic} className="absolute bottom-2.5 left-2.5" />}
         </div>
         <div className={row ? 'flex min-w-0 flex-1 gap-3 sm:mt-3' : 'mt-3 flex gap-3'}>
-          <DateBlock start={e.start} tba={e.tba} />
+          <DateBlock start={e.start} tba={e.tba} span={e.span} past={e.start < today} />
           <div className="min-w-0 pt-px">
             <h3 className="line-clamp-2 text-[15px] leading-snug font-semibold decoration-line/40 underline-offset-[3px] group-hover:underline">{e.title}</h3>
             <p className="mt-1 flex flex-wrap gap-x-2.5 text-[13px] leading-snug">
@@ -460,6 +468,15 @@ export function Card({ e, today, row, when, outside, lazy }: { e: Ev; today: str
       {(!outside || ACCOUNTS) && <div className={row ? 'absolute top-1.5 left-[94px] sm:top-2.5 sm:right-2.5 sm:left-auto' : 'absolute top-2.5 right-2.5'}><SaveButton id={e.id} title={e.title} needsAccount={outside} /></div>}
     </article>
   )
+}
+
+/**
+ * Cards split at the visitor's own day: with `ahead`, what comes out today or later, otherwise what came out before today. A page
+ * made on the server knows only the server's day (UTC, and up to an hour old), so it sends a day more on each side and this trims it.
+ */
+export function DayGrid({ items, today: serverToday, ahead, max, className }: { items: Ev[]; today: string; ahead?: boolean; max: number; className: string }) {
+  const today = useToday(serverToday)
+  return <div className={className}>{items.filter((e) => (e.start >= today) === !!ahead).slice(0, max).map((e) => <Card key={e.id} e={e} today={today} row lazy />)}</div>
 }
 
 export function Countdown({ start, today, className = '' }: { start: string; today: string; className?: string }) {

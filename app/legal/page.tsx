@@ -1,10 +1,12 @@
-import type { Metadata } from 'next'
+import type { Metadata, ResolvingMetadata } from 'next'
 import type { ReactNode } from 'react'
 import { A, Doc, DocSection, REPO } from '@/components/site'
 import { ACCOUNTS } from '@/lib/core'
+import { card } from '@/lib/meta'
 import { neonRegion } from '@/lib/pgconfig.mjs'
 
-export const metadata: Metadata = { title: 'Terms and privacy', alternates: { canonical: '/legal' } }
+const description = 'The terms of use and the privacy policy of Dropdate, in plain words.'
+export const generateMetadata = async (_: unknown, parent: ResolvingMetadata): Promise<Metadata> => ({ title: 'Terms and privacy', description, alternates: { canonical: '/legal' }, ...(await card(parent, 'Terms and privacy', description, '/legal')) })
 
 const UPDATED = 'November 2026'
 const PLACES: Record<string, string> = {
@@ -58,7 +60,7 @@ export default function Legal() {
               <li className={li}><strong>Your sign-in.</strong> One cookie, set only when you sign in, keeps you signed in (and, only while you sign in with Google or Discord, a short-lived one that protects that sign-in). A matching record in our database holds only a secret that matches the cookie, and its dates. A sign-in lasts 30 days and is renewed each time you come back after a day, so you stay signed in as long as you keep using Dropdate. It ends when you sign out, delete the account or stop coming for 30 days. These cookies are strictly necessary for the account to work, so they need no consent banner. Your browser also stores a small marker (<span className="code-inline">dropdate:session</span>) so the header shows the right button, and, signed out, your saved list (<span className="code-inline">dropdate:saved</span>). Neither is sent to anyone.</li>
               <li className={li}><strong>Abuse protection.</strong> To stop someone flooding sign-in emails or the data sources, we count requests per network address, per email address and per account. The counters are stored only as scrambled values and are deleted within two days.</li>
               <li className={li}><strong>Sign-in with Google or Discord</strong> (when offered). We receive your email address, and the identifier the provider uses for you (a code or number, not your name). Both are stored: the identifier is how we recognise you next time. Nothing else is kept: no name, photo or access tokens, and with Google we only ask for your email address.</li>
-              <li className={li}><strong>Calendar link</strong> (only if you use it). The link you copy from your wishlist contains the list of games on it, not your email address. Whoever you give it to, and the calendar service that fetches it (Google, Apple, Microsoft), can see that list, so share it only with services you trust.</li>
+              <li className={li}><strong>Calendar link</strong> (only if you use it). The link you copy from your wishlist contains the list of games on it, not your email address. A link from a game, a platform or an esports page only names that game, platform or esports game. Whoever you give it to, and the calendar service that fetches it (Google, Apple, Microsoft), can see that list, so share it only with services you trust.</li>
               <li className={li}><strong>What is not stored:</strong> passwords, names, photos, IP addresses or device details in our database. The hosting provider may keep standard request logs, such as IP addresses, for security and operations.</li>
             </ul>
             <p className="prose-dd mt-5">We use this data to run your account and keep the service secure, which is what the law calls performing the service you asked for and our legitimate interest in security. We never sell it, share it for advertising or use it to profile you.</p>
@@ -73,7 +75,7 @@ export default function Legal() {
                 <li className={li}><strong><A to="https://neon.com/privacy-policy">Neon</A></strong> stores the database, in {place}. It is encrypted at rest.</li>
                 <li className={li}><strong><A to="https://resend.com/legal/privacy-policy">Resend</A></strong> delivers the sign-in email and, if you ask for them, the release emails, so it sees your email address and what the email says, and keeps its own delivery logs for a short time.</li>
                 <li className={li}><strong>Google or Discord</strong>, only if you choose to sign in with them.</li>
-                <li className={li}><strong>Your calendar app</strong>, only if you subscribe it to your wishlist link.</li>
+                <li className={li}><strong>Your calendar app</strong>, only if you subscribe it to a calendar link.</li>
                 <li className={li}><strong><A to="https://www.igdb.com">IGDB</A> (run by Twitch), <A to="https://store.steampowered.com">Steam</A> and <A to="https://pandascore.co">PandaScore</A></strong> supply game and esports data. Your browser loads artwork straight from their servers, which can see your IP address, like any website you visit. Nothing about your account goes to them. When you search for a game by name, the words you typed go from our server to IGDB and Steam, without your address. <strong><A to="https://www.youtube.com/t/terms">YouTube</A></strong> loads a trailer only when you press play on it.</li>
               </ul>
               <p>Some of these companies work in the United States and elsewhere, and rely on the safeguards the law allows, such as standard contractual clauses, when data travels.</p>

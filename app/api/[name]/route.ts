@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { PLATFORMS, ics } from '@/lib/core'
+import { PLATFORMS, genreName, ics } from '@/lib/core'
 import { getEvents, searchGames } from '@/lib/data'
 import { allow, clientIp } from '@/lib/db'
 import { search } from '@/lib/search'
@@ -22,10 +22,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ name
   // Every calendar game's screenshots by id: the home page leaves them out and its cards fetch them once, on the first hover
   if (name === 'shots') return json(Object.fromEntries(data.events.flatMap((e) => (e.shots?.length ? [[e.id, e.shots]] : []))), 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400')
   if (data.error) return new NextResponse('Calendar temporarily unavailable', { status: 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': '600' } })
-  const ids = sp.get('ids')?.split(',').filter(Boolean), type = sp.get('type')
-  const list = ids ? data.events.filter((e) => ids.includes(e.id)) : search(data.events, sp.get('q') ?? '', data.today, {
-    kind: type === 'release' || type === 'tournament' ? type : 'all', platform: PLATFORMS.find((p) => p.toLowerCase() === sp.get('platform')?.toLowerCase()),
-    genre: sp.get('genre') ?? undefined, past: sp.get('past') === 'true',
+  const ids = sp.get('ids')?.split(',').filter(Boolean), type = sp.get('type'), q = sp.get('q') ?? '', asked = sp.get('genre') ?? undefined
+  const genre = asked && genreName(asked) // a feed subscribed with Steam's word for a genre ("Simulation") keeps its games
+  const platform = PLATFORMS.find((p) => p.toLowerCase() === sp.get('platform')?.toLowerCase())
+  const list = ids ? data.events.filter((e) => ids.includes(e.id)) : search(data.events, q, data.today, {
+    kind: type === 'release' || type === 'tournament' ? type : 'all', platform, genre, past: sp.get('past') === 'true',
   }).list
-  return new NextResponse(ics(list.slice(0, 500)), { headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': 'inline; filename="dropdate.ics"', 'Cache-Control': 'public, s-maxage=3600' } })
+  // The feeds the pages offer are named after what they hold, so several can be told apart in a calendar app: one game (its page),
+  // one platform's releases (app/releases), one esports game's tournaments (app/esports). Any other feed is "Dropdate".
+  const called = ids ? (ids.length === 1 && list.length === 1 ? `Dropdate: ${list[0].title}` : undefined)
+    : q ? undefined : type === 'tournament' && genre ? `Dropdate: ${genre.replace(/\s+/g, ' ').trim().slice(0, 60)} esports` : type === 'release' && platform && !genre ? `Dropdate: ${platform} releases` : undefined
+  return new NextResponse(ics(list.slice(0, 500), data.updated, called), { headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': 'inline; filename="dropdate.ics"', 'Cache-Control': 'public, s-maxage=3600' } })
 }

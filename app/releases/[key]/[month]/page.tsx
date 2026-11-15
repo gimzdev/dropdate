@@ -1,9 +1,10 @@
-import type { Metadata } from 'next'
+import type { Metadata, ResolvingMetadata } from 'next'
 import { notFound, permanentRedirect } from 'next/navigation'
 import { cache } from 'react'
 import { Around, CardGrid, ListPage, Part, Pills, ldList, listedGame } from '@/components/lists'
 import { MONTHS, PLATFORMS, iso, monthLabel, monthPath, nextMonth, platformPath } from '@/lib/core'
 import { monthBounds, monthReleases } from '@/lib/data'
+import { card } from '@/lib/meta'
 
 // A month's releases: /releases/2026/november (and /releases/2026/11, sent on to it)
 
@@ -21,14 +22,12 @@ async function monthOf(params: Props['params']) {
   return { month: `${key}-${String(n).padStart(2, '0')}`, exact: month === MONTHS[n - 1] }
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: Props, parent: ResolvingMetadata): Promise<Metadata> {
   const at = await monthOf(params), found = at && (await load(at.month))
   if (!at || !found?.events.length) return { title: 'Releases' }
-  const label = monthLabel(at.month), first = found.events.filter((e) => !e.tba).sort((a, b) => b.pop - a.pop).slice(0, 3).map((e) => e.title)
-  return {
-    title: `Game releases in ${label}`, alternates: { canonical: monthPath(at.month) },
-    description: `The most awaited games of ${label}, by day${first.length ? `: ${first.join(', ')} and more` : ''}. Release dates from ${found.updated ? 'IGDB and Steam' : 'IGDB'}.`,
-  }
+  const label = monthLabel(at.month), first = found.events.filter((e) => !e.tba).sort((a, b) => b.pop - a.pop).slice(0, 3).map((e) => e.title), title = `Game releases in ${label}`
+  const description = `The most awaited games of ${label}, by day${first.length ? `: ${first.join(', ')} and more` : ''}. Release dates from ${found.updated ? 'IGDB and Steam' : 'IGDB'}.`
+  return { title, description, alternates: { canonical: monthPath(at.month) }, ...(await card(parent, title, description, monthPath(at.month))) }
 }
 
 export default async function MonthPage({ params }: Props) {

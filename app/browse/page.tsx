@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, ResolvingMetadata } from 'next'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 import { cache } from 'react'
@@ -8,6 +8,7 @@ import { Card, Header, Icon } from '@/components/ui'
 import { BROWSE_PAGE, BROWSE_PAGES, type BrowseQuery, browseHref, iso, lite, parseBrowse } from '@/lib/core'
 import { type BrowseError, browseGames, getEvents } from '@/lib/data'
 import { allow, clientIp } from '@/lib/db'
+import { card } from '@/lib/meta'
 
 // Every game IGDB knows, by year, platform, genre or name, sorted by popularity, score or date. Made here for the address in the bar.
 
@@ -31,12 +32,11 @@ const look = cache(async (key: string) => {
 })
 const queryOf = async (searchParams: Props['searchParams']) => parseBrowse(await searchParams, +iso(new Date()).slice(0, 4))
 
-export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+export async function generateMetadata({ searchParams }: Props, parent: ResolvingMetadata): Promise<Metadata> {
   const { problem } = await look(JSON.stringify(await queryOf(searchParams)))
+  const title = 'Browse every game', description = 'Hundreds of thousands of games, from the first arcade cabinets to what comes out next year: browse by year, platform and genre, or search by name.'
   return {
-    title: 'Browse every game',
-    description: 'Hundreds of thousands of games, from the first arcade cabinets to what comes out next year: browse by year, platform and genre, or search by name.',
-    alternates: { canonical: '/browse' },
+    title, description, alternates: { canonical: '/browse' }, ...(await card(parent, title, description, '/browse')),
     ...((Object.keys(await searchParams).length > 0 || !!problem) && { robots: { index: false, follow: true } }), // only the plain page is for search engines
   }
 }
@@ -55,6 +55,7 @@ export default async function Browse({ searchParams }: Props) {
         <p className="mt-5 max-w-2xl text-lg text-muted">Hundreds of thousands of games, from the first arcade cabinets to what comes out next year. Pick a year, a platform or a genre, or search by name.</p>
         <BrowseShell query={query} thisYear={+today.slice(0, 4)}>
           <div id="results" className="scroll-mt-44" />
+          <h2 className="sr-only">Games</h2>
           {problem ? (
             <div role="status" className={`${box} mt-10`}>
               <p className="text-lg font-semibold">{PROBLEMS[problem][0]}</p>

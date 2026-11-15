@@ -3,7 +3,7 @@ import { Explorer, Fresh, Hero, Schedule, Upcoming, WeekStrip } from '@/componen
 import { Footer } from '@/components/site'
 import { SupportNote } from '@/components/support'
 import { Circled, Header } from '@/components/ui'
-import { type Ev, gap, shift } from '@/lib/core'
+import { type Ev, SITE, gap, shift } from '@/lib/core'
 import { getEvents } from '@/lib/data'
 
 export const revalidate = 3600 // rebuilt in the background from live data: nothing to maintain
@@ -23,7 +23,7 @@ export default async function Home() {
   const releases = events.filter((e) => e.kind === 'release'), ahead = releases.filter((e) => e.start >= today), soon = ahead.filter((e) => gap(today, e.start) <= 120)
   const hero = [...(soon.length >= 3 ? soon : ahead)].filter(hasArt).sort(hype).slice(0, 5), shown = new Set(hero.map((e) => e.id))
   const near = (d?: string) => !!d && d >= shift(today, -1) && d <= shift(today, 7) // the browser works out its own today: a day either side
-  const week = events.filter((e) => near(e.start) || (e.kind === 'tournament' && near(e.end))) // what starts, and tournaments whose final day falls in the week
+  const week = events.filter((e) => (near(e.start) && !e.tba) || (e.kind === 'tournament' && near(e.end))) // what starts on a known day, and tournaments whose final day falls in the week
   const later = ahead.filter((e) => e.start > today && !shown.has(e.id)), year = later.filter((e) => gap(today, e.start) <= 365)
   const ranked = [...(year.length >= 6 ? year : later)].sort(hype).slice(0, 11)
   const [lead] = ranked.splice(Math.max(0, ranked.findIndex(hasArt)), 1) // the big tile is the first with artwork
@@ -38,11 +38,12 @@ export default async function Home() {
         <WeekStrip items={week} today={today} />
         {lead && ranked.length >= 2 ? <Upcoming items={[art(lead), ...ranked]} today={today} /> : <span id="upcoming" />}
         <Fresh items={fresh} today={today} />
-        <SupportNote className="wrap pb-14 md:pb-20">Dropdate is <span className="relative mx-1.5 inline-block font-semibold text-fg">free<Circled className="-inset-x-2 -inset-y-1.5" /></span> for everyone, with no ads, no tracking and no paywall. One developer builds it, and supporters keep it running.</SupportNote>
+        <SupportNote className="wrap pb-14 md:pb-20">Dropdate is <span className="relative mx-1.5 inline-block font-semibold text-fg">free<Circled className="-inset-x-2 -inset-y-1.5" /></span> for everyone, with no ads, no tracking cookies and no paywall. One developer builds it, and supporters keep it running.</SupportNote>
         {cups.length ? <Schedule items={cups} today={today} /> : <span id="esports" />}
         <Explorer data={{ ...data, events }} />
       </main>
       <Footer />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebSite', name: 'Dropdate', url: SITE, description: 'Game releases and esports tournaments in one calendar, refreshed every hour.' }).replace(/</g, '\\u003c') }} />
     </>
   )
 }

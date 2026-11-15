@@ -11,17 +11,24 @@ export interface Ev {
   id: string; title: string; kind: Kind; start: string; end?: string // YYYY-MM-DD, end inclusive
   slug?: string; url?: string // a release opens /game/[slug], a tournament its own page
   thumb: string; shots?: string[]; image?: string // card artwork ('' if none), hover frames, large artwork (hero only)
-  platforms: Platform[]; genres: string[]; rating?: number; metacritic?: number; pop: number; prize?: string; tba?: boolean
+  platforms: Platform[]; genres: string[]; rating?: number; metacritic?: number; pop: number; prize?: string
+  tba?: boolean; span?: Span // tba: no day yet, `start` is the last day of its month; span: not even a month, `start` is the last day of that quarter or year
 }
+export type Span = 'quarter' | 'year'
 /** A game found by name anywhere, calendar or not. undated: the source gives no date (the game may be out). */
-export interface Found { key: string; slug: string; title: string; released?: string; thumb: string; metacritic?: number; undated?: boolean }
+export interface Found { key: string; slug: string; title: string; released?: string; tba?: boolean; span?: Span; thumb: string; metacritic?: number; undated?: boolean }
 export interface Payload { events: Ev[]; today: string; updated: string; stale: boolean; error?: string; sources?: Record<string, number> }
 export interface Game {
   id: string; slug: string; name: string; description?: string; released?: string; website?: string; image?: string
+  loose?: { start: string; span?: Span } // a first release known only by its month, quarter or year (`released` is an exact day)
   rating?: number; metacritic?: number; scoreFrom?: string; age?: string; playtime?: number
   trailer?: { preview?: string; src?: string; youtube?: string } // a video file (Steam) or a YouTube id (IGDB)
   genres: string[]; tags: string[]; platforms: string[]; developers: string[]; publishers: string[]; screenshots: string[]; stores: { name: string; url: string }[]
 }
+
+/** Steam's names for the genres IGDB also has, in IGDB's words: the calendar lists each genre once. A feed made with Steam's word still works. */
+const GENRE_NAMES: Record<string, string> = { RPG: 'Role-playing (RPG)', Simulation: 'Simulator', Sports: 'Sport' }
+export const genreName = (g: string) => (Object.hasOwn(GENRE_NAMES, g) ? GENRE_NAMES[g] : g)
 
 // ── Dates: calendar days as YYYY-MM-DD, local time ──
 
@@ -42,9 +49,17 @@ export const monthLabel = (month: string) => monthYear(`${month}-01`)
 export const monthShort = fmt({ month: 'short' })
 export const weekday = fmt({ weekday: 'long' })
 
-export function status(e: Pick<Ev, 'kind' | 'start' | 'end'>, today: string) {
+/** What a date without a day is called: "November 2026", "Q4 2026" or "2026". */
+export const period = (e: Pick<Ev, 'start' | 'span'>) =>
+  e.span === 'year' ? e.start.slice(0, 4) : e.span === 'quarter' ? `Q${Math.ceil(+e.start.slice(5, 7) / 3)} ${e.start.slice(0, 4)}` : monthLabel(e.start.slice(0, 7))
+/** The same in a few letters, under "TBA": "Nov", "Q4" or "2026". */
+export const periodShort = (e: Pick<Ev, 'start' | 'span'>) =>
+  e.span === 'year' ? e.start.slice(0, 4) : e.span === 'quarter' ? `Q${Math.ceil(+e.start.slice(5, 7) / 3)}` : monthShort(e.start)
+
+export function status(e: Pick<Ev, 'kind' | 'start' | 'end' | 'tba' | 'span'>, today: string) {
   const rel = e.kind === 'release', d = gap(today, e.start)
   if ((e.end ?? e.start) < today) return { label: rel ? 'Out now' : 'Ended', tone: 'past' as const }
+  if (e.tba) return { label: period(e), tone: 'future' as const } // no day to count down to: the month, quarter or year it is set for
   if (d <= 0) return { label: rel ? 'Out today' : 'Live now', tone: 'live' as const }
   if (d === 1) return { label: 'Tomorrow', tone: 'soon' as const }
   return { label: d < 60 ? `In ${d} days` : `In ${Math.round(d / 30)} months`, tone: d <= 7 ? ('soon' as const) : ('future' as const) }
@@ -57,8 +72,10 @@ export function ago(time: string) {
 export const lite = ({ image: _, ...e }: Ev): Ev => e // large artwork stays on the server unless the hero needs it
 export const href = (e: Pick<Ev, 'slug' | 'url'>) => (e.slug ? `/game/${e.slug}` : (e.url ?? '#'))
 export const scoreTone = (n: number) => (n >= 75 ? 'bg-emerald-500 text-black' : n >= 50 ? 'bg-amber-400 text-black' : 'bg-rose-500 text-white')
+/** The same picture in the sizes its source offers, for `srcSet`: with `sizes`, a small slot or a phone loads a small file. */
 export function srcSet(u?: string) {
   if (u?.includes('/t_1080p/')) return `${u.replace('/t_1080p/', '/t_screenshot_big/')} 889w, ${u.replace('/t_1080p/', '/t_720p/')} 1280w, ${u} 1920w`
+  if (u?.includes('/t_screenshot_big/')) return `${u.replace('/t_screenshot_big/', '/t_screenshot_med/')} 569w, ${u} 889w` // card artwork: 569 px is enough for most slots
   if (u?.includes('.1920x1080.')) return `${u.replace('.1920x1080.', '.600x338.')} 600w, ${u} 1920w`
 }
 
@@ -67,6 +84,8 @@ export function srcSet(u?: string) {
 const ymd = (s: string) => s.replace(/-/g, '')
 const until = (e: Pick<Ev, 'start' | 'end'>) => ymd(shift(e.end ?? e.start, 1)) // all-day ends are exclusive
 const link = (e: Pick<Ev, 'slug' | 'url'>) => (e.slug ? `${SITE}/game/${e.slug}` : (e.url ?? SITE))
+/** An event's name in a calendar. A release without a day sits on the last day of its month there, so its name says what is known. */
+export const calTitle = (e: Pick<Ev, 'title' | 'start' | 'tba' | 'span'>) => (e.tba && e.start ? `${e.title} (${period(e)}, ${e.span ? 'date' : 'day'} not announced)` : e.title)
 /** Long lines go on over several, at most 75 bytes each (RFC 5545). */
 function fold75(line: string) {
   let out = '', bytes = 0
@@ -78,15 +97,30 @@ function fold75(line: string) {
   }
   return out
 }
-export function ics(events: Ev[]) {
-  const stamp = new Date().toISOString().replace(/[-:]|\.\d{3}/g, ''), esc = (s: string) => s.replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\r?\n/g, '\\n')
-  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Dropdate//EN', 'X-WR-CALNAME:Dropdate', 'REFRESH-INTERVAL;VALUE=DURATION:PT6H',
-    ...events.flatMap((e) => ['BEGIN:VEVENT', `UID:${e.id}@dropdate`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${ymd(e.start)}`, `DTEND;VALUE=DATE:${until(e)}`, `SUMMARY:${esc(e.title)}`, `URL:${link(e)}`, 'END:VEVENT']),
+/** Text in a calendar file: no control characters, line breaks as \n, and \ ; , escaped (RFC 5545, 3.3.11). */
+const icsText = (s: string) => s.replace(/\r\n?/g, '\n').replace(/[\x00-\x09\x0b-\x1f\x7f]/g, ' ').replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\n/g, '\\n')
+/** A link in a calendar file: one line, whatever the source sent. */
+const icsUrl = (u: string) => u.replace(/[\x00-\x20\x7f]/g, (c) => encodeURIComponent(c))
+/** What a calendar shows when the event is opened: platforms and genres (a tournament: its game and prize pool), then the page. */
+function icsNotes(e: Ev) {
+  const facts = e.kind === 'tournament' ? [e.genres[0], e.prize && `Prize pool ${e.prize}`] : [e.platforms.join(', '), e.genres.slice(0, 3).join(', ')]
+  return [...(e.tba && e.start ? [`Set for ${period(e)}. The ${e.span ? 'date' : 'day'} is not announced yet.`] : []), facts.filter(Boolean).join(' · '), icsUrl(link(e))].filter(Boolean).join('\n')
+}
+/**
+ * The calendar feed (RFC 5545): all-day events without a time zone, so a release is on its day wherever the calendar is read.
+ * UIDs never change for an event. `at`: when the data was last read from its sources (DTSTAMP). `name`: what calendar apps call the feed.
+ */
+export function ics(events: Ev[], at: string | Date = new Date(), name = 'Dropdate') {
+  const time = new Date(at), stamp = (Number.isNaN(time.getTime()) ? new Date() : time).toISOString().replace(/[-:]|\.\d{3}/g, '')
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Dropdate//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${icsText(name)}`, `NAME:${icsText(name)}`,
+    'X-WR-CALDESC:Game releases and esports tournaments from dropdate.net', 'REFRESH-INTERVAL;VALUE=DURATION:PT6H', 'X-PUBLISHED-TTL:PT6H',
+    ...events.filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e.start)).flatMap((e) => ['BEGIN:VEVENT', `UID:${icsText(e.id)}@dropdate`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${ymd(e.start)}`, `DTEND;VALUE=DATE:${until(e)}`,
+      `SUMMARY:${icsText(calTitle(e))}`, `DESCRIPTION:${icsText(icsNotes(e))}`, `URL:${icsUrl(link(e))}`, 'TRANSP:TRANSPARENT', 'END:VEVENT']),
     'END:VCALENDAR', ''].map(fold75).join('\r\n')
 }
 export const webcal = (url: string) => url.replace(/^https?:\/\//, 'webcal://')
-export const googleUrl = (e: Pick<Ev, 'title' | 'start' | 'end' | 'slug' | 'url'>) =>
-  `https://calendar.google.com/calendar/render?${new URLSearchParams({ action: 'TEMPLATE', text: e.title, dates: `${ymd(e.start)}/${until(e)}`, details: link(e) })}`
+export const googleUrl = (e: Pick<Ev, 'title' | 'start' | 'end' | 'slug' | 'url' | 'tba' | 'span'>) =>
+  `https://calendar.google.com/calendar/render?${new URLSearchParams({ action: 'TEMPLATE', text: calTitle(e), dates: `${ymd(e.start)}/${until(e)}`, details: link(e) })}`
 
 // ── Accounts ──
 
